@@ -23,7 +23,8 @@ def get_password_hash(password):
     return pwd_context.hash(password)
 
 def get_user_by_username(db: Session, username: str):
-    return db.query(models.User).filter(models.User.username == username).first()
+    login = username.strip().lower()
+    return db.query(models.User).filter((models.User.username == login) | (models.User.email == login)).first()
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
@@ -49,6 +50,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     except JWTError:
         raise credentials_exception
     user = get_user_by_username(db, username=username)
-    if user is None:
+    if user is None or not user.active:
         raise credentials_exception
     return user

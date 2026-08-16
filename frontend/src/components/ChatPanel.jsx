@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import axios from 'axios'
 import EmojiPicker from 'emoji-picker-react'
 import { Button } from '@/components/ui/button'
@@ -13,16 +13,19 @@ export function ChatPanel({ open, onOpenChange, patient }) {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const scrollRef = useRef(null)
 
-  useEffect(() => {
-    if (open && patient) {
-      fetchMessages()
-    }
-  }, [open, patient])
+  const scrollToBottom = useCallback(() => {
+    setTimeout(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollIntoView({ behavior: 'smooth' })
+      }
+    }, 100)
+  }, [])
 
-  const fetchMessages = async () => {
+  const fetchMessages = useCallback(async () => {
+    if (!patient) return
     const token = localStorage.getItem('token')
     try {
-      const res = await axios.get(`http://localhost:8000/patients/${patient.id}/messages`, {
+      const res = await axios.get(`/api/patients/${patient.id}/messages`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       setMessages(res.data)
@@ -30,15 +33,12 @@ export function ChatPanel({ open, onOpenChange, patient }) {
     } catch (error) {
       console.error(error)
     }
-  }
+  }, [patient, scrollToBottom])
 
-  const scrollToBottom = () => {
-    setTimeout(() => {
-      if (scrollRef.current) {
-        scrollRef.current.scrollIntoView({ behavior: 'smooth' })
-      }
-    }, 100)
-  }
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (open && patient) fetchMessages()
+  }, [fetchMessages, open, patient])
 
   const handleSend = async (e) => {
     e?.preventDefault()
@@ -46,7 +46,7 @@ export function ChatPanel({ open, onOpenChange, patient }) {
 
     const token = localStorage.getItem('token')
     try {
-      await axios.post(`http://localhost:8000/patients/${patient.id}/messages`, 
+      await axios.post(`/api/patients/${patient.id}/messages`,
         { content: newMessage, direction: 'out' }, 
         { headers: { Authorization: `Bearer ${token}` } }
       )

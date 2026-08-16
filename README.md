@@ -1,6 +1,6 @@
-# Sistema de clínica odontológica
+# OdontoSpace
 
-Aplicación de ejemplo con una API en FastAPI y una interfaz en React/Vite.
+Sistema de gestión para clínica odontológica con una API en FastAPI y una interfaz en React/Vite.
 
 ## Configuración local
 

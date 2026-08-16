@@ -1,155 +1,30 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ArrowDownRight, ArrowUpRight, Plus } from 'lucide-react'
+import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
-import { 
-  CreditCard, DollarSign, TrendingUp, Receipt, 
-  ArrowUpRight, ArrowDownRight, Wallet, PiggyBank 
-} from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
-const mockTransactions = [
-  { id: 1, patient: 'María García', concept: 'Limpieza dental', amount: 1500, type: 'income', date: '2024-01-15', method: 'Tarjeta' },
-  { id: 2, patient: 'Carlos López', concept: 'Ortodoncia - Cuota 3', amount: 3500, type: 'income', date: '2024-01-15', method: 'Efectivo' },
-  { id: 3, patient: null, concept: 'Material desechable', amount: -800, type: 'expense', date: '2024-01-14', method: 'Transferencia' },
-  { id: 4, patient: 'Ana Martínez', concept: 'Extracción molar', amount: 2200, type: 'income', date: '2024-01-14', method: 'Tarjeta' },
-  { id: 5, patient: null, concept: 'Guantes y mascarillas', amount: -450, type: 'expense', date: '2024-01-13', method: 'Efectivo' },
-]
-
+const money = (v) => new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(v||0)
 export default function PagosPage() {
-  const totalIncome = mockTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0)
-  const totalExpense = Math.abs(mockTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0))
-  const balance = totalIncome - totalExpense
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-white tracking-tight">Pagos y Caja</h1>
-        <p className="text-zinc-400 text-sm mt-1">Control financiero de la clínica</p>
-      </div>
-
-      {/* Banner de Integración Pendiente */}
-      <div className="glass border border-amber-500/20 rounded-2xl p-5 bg-amber-500/5">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-amber-500/20 rounded-lg">
-            <CreditCard className="w-5 h-5 text-amber-400" />
-          </div>
-          <div>
-            <h3 className="text-amber-300 font-semibold text-sm">Integración con Stripe/MercadoPago Pendiente</h3>
-            <p className="text-amber-400/70 text-xs mt-0.5">
-              Configura tu pasarela de pagos para cobrar online. Consulta la guía de configuración.
-            </p>
-          </div>
-          <Button variant="outline" size="sm" className="ml-auto border-amber-500/30 text-amber-400 hover:bg-amber-500/20 text-xs">
-            Ver Guía
-          </Button>
-        </div>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="glass border-white/10">
-          <CardContent className="p-5">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-zinc-400 text-xs font-medium">Ingresos del Día</p>
-                <p className="text-2xl font-bold text-white mt-1">${totalIncome.toLocaleString()}</p>
-              </div>
-              <div className="p-2 bg-emerald-500/20 rounded-lg">
-                <ArrowUpRight className="w-4 h-4 text-emerald-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="glass border-white/10">
-          <CardContent className="p-5">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-zinc-400 text-xs font-medium">Egresos del Día</p>
-                <p className="text-2xl font-bold text-white mt-1">${totalExpense.toLocaleString()}</p>
-              </div>
-              <div className="p-2 bg-red-500/20 rounded-lg">
-                <ArrowDownRight className="w-4 h-4 text-red-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="glass border-white/10">
-          <CardContent className="p-5">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-zinc-400 text-xs font-medium">Balance</p>
-                <p className={`text-2xl font-bold mt-1 ${balance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  ${balance.toLocaleString()}
-                </p>
-              </div>
-              <div className="p-2 bg-blue-500/20 rounded-lg">
-                <Wallet className="w-4 h-4 text-blue-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="glass border-white/10">
-          <CardContent className="p-5">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-zinc-400 text-xs font-medium">Cobros Pendientes</p>
-                <p className="text-2xl font-bold text-amber-400 mt-1">$4,200</p>
-              </div>
-              <div className="p-2 bg-amber-500/20 rounded-lg">
-                <PiggyBank className="w-4 h-4 text-amber-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Transactions Table */}
-      <Card className="glass border-white/10">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-white text-lg">Movimientos Recientes</CardTitle>
-          <Button variant="outline" size="sm" className="glass border-primary/30 text-primary text-xs">
-            + Registrar Movimiento
-          </Button>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md border border-white/10 overflow-hidden bg-black/20">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-white/10 bg-white/5">
-                  <th className="text-left text-zinc-300 text-xs font-medium p-3">Concepto</th>
-                  <th className="text-left text-zinc-300 text-xs font-medium p-3">Paciente</th>
-                  <th className="text-left text-zinc-300 text-xs font-medium p-3">Método</th>
-                  <th className="text-left text-zinc-300 text-xs font-medium p-3">Fecha</th>
-                  <th className="text-right text-zinc-300 text-xs font-medium p-3">Monto</th>
-                </tr>
-              </thead>
-              <tbody>
-                {mockTransactions.map((t) => (
-                  <tr key={t.id} className="border-b border-white/10 hover:bg-white/5 transition-colors">
-                    <td className="p-3">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-1.5 h-1.5 rounded-full ${t.type === 'income' ? 'bg-emerald-400' : 'bg-red-400'}`} />
-                        <span className="text-white text-sm">{t.concept}</span>
-                      </div>
-                    </td>
-                    <td className="p-3 text-zinc-400 text-sm">{t.patient || '—'}</td>
-                    <td className="p-3">
-                      <span className="text-xs px-2 py-1 rounded-full bg-white/5 text-zinc-300 border border-white/10">
-                        {t.method}
-                      </span>
-                    </td>
-                    <td className="p-3 text-zinc-400 text-sm">{t.date}</td>
-                    <td className={`p-3 text-right text-sm font-semibold ${t.type === 'income' ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {t.type === 'income' ? '+' : '-'}${Math.abs(t.amount).toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  )
+  const [payments,setPayments]=useState([]); const [patients,setPatients]=useState([])
+  const [form,setForm]=useState({patient_id:'',type:'income',concept:'',amount:'',method:'cash'})
+  const load=useCallback(async()=>{const [a,b]=await Promise.all([api.get('/payments/'),api.get('/patients/')]);setPayments(a.data);setPatients(b.data)},[])
+  useEffect(()=>{
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load()
+  },[load])
+  const names=useMemo(()=>Object.fromEntries(patients.map(p=>[p.id,p.name])),[patients])
+  const income=payments.filter(p=>p.type==='income').reduce((s,p)=>s+p.amount,0), expenses=payments.filter(p=>p.type==='expense').reduce((s,p)=>s+p.amount,0)
+  const create=async(e)=>{e.preventDefault();await api.post('/payments/',{...form,patient_id:form.patient_id?Number(form.patient_id):null,amount:Number(form.amount)});setForm({patient_id:'',type:'income',concept:'',amount:'',method:'cash'});load()}
+  return <div className="space-y-6"><header><h1 className="text-3xl font-bold text-white">Pagos y Caja</h1><p className="text-zinc-400">Ingresos, egresos y movimientos por paciente.</p></header>
+    <div className="grid sm:grid-cols-3 gap-4">{[['Ingresos',income,'text-emerald-400'],['Egresos',expenses,'text-red-400'],['Balance',income-expenses,'text-primary']].map(([l,v,c])=><Card key={l} className="glass border-white/10"><CardContent className="p-5"><p className="text-xs text-zinc-500">{l}</p><p className={`text-2xl font-bold mt-1 ${c}`}>{money(v)}</p></CardContent></Card>)}</div>
+    <div className="grid lg:grid-cols-[360px_1fr] gap-6"><Card className="glass border-white/10"><CardHeader><CardTitle className="text-white">Nuevo movimiento</CardTitle></CardHeader><CardContent><form onSubmit={create} className="space-y-3">
+      <div><Label>Tipo</Label><select value={form.type} onChange={e=>setForm({...form,type:e.target.value})} className="mt-1 w-full bg-zinc-900 border border-white/10 rounded-md p-2"><option value="income">Ingreso</option><option value="expense">Egreso</option></select></div>
+      <div><Label>Paciente (opcional)</Label><select value={form.patient_id} onChange={e=>setForm({...form,patient_id:e.target.value})} className="mt-1 w-full bg-zinc-900 border border-white/10 rounded-md p-2"><option value="">General</option>{patients.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+      <div><Label>Concepto</Label><Input required value={form.concept} onChange={e=>setForm({...form,concept:e.target.value})} className="mt-1 bg-white/5 border-white/10" /></div><div><Label>Valor</Label><Input required type="number" min="0" value={form.amount} onChange={e=>setForm({...form,amount:e.target.value})} className="mt-1 bg-white/5 border-white/10" /></div>
+      <div><Label>Método</Label><select value={form.method} onChange={e=>setForm({...form,method:e.target.value})} className="mt-1 w-full bg-zinc-900 border border-white/10 rounded-md p-2"><option value="cash">Efectivo</option><option value="card">Tarjeta</option><option value="transfer">Transferencia</option></select></div><Button className="w-full"><Plus className="w-4 h-4 mr-2" />Registrar</Button>
+    </form></CardContent></Card><Card className="glass border-white/10"><CardHeader><CardTitle className="text-white">Movimientos recientes</CardTitle></CardHeader><CardContent className="space-y-2">{payments.length===0?<p className="text-zinc-500 text-center py-10">No hay movimientos.</p>:payments.map(p=><div key={p.id} className="flex items-center gap-3 border-b border-white/5 py-3">{p.type==='income'?<ArrowUpRight className="text-emerald-400"/>:<ArrowDownRight className="text-red-400"/>}<div className="flex-1"><p className="text-white">{p.concept}</p><p className="text-xs text-zinc-500">{names[p.patient_id]||'Movimiento general'} · {p.method}</p></div><p className={p.type==='income'?'text-emerald-400':'text-red-400'}>{money(p.amount)}</p></div>)}</CardContent></Card></div>
+  </div>
 }

@@ -1,10 +1,12 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { createContext, useState, useEffect, useCallback, useContext, useMemo } from 'react'
+import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import axios from 'axios'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { PhoneInput } from '@/components/PhoneInput'
 import {
   ArrowLeft,
   Save,
@@ -20,12 +22,13 @@ import {
   MessageSquareText,
   Cigarette,
   Scissors,
-  User,
   Phone,
   Mail,
+  Pencil,
 } from 'lucide-react'
 
-const API = 'http://localhost:8000'
+const API = '/api'
+const ClinicalReadOnlyContext = createContext(false)
 
 // Tab definitions with color schemes
 const TABS = [
@@ -89,9 +92,12 @@ const emptyForm = {
   examen_intraoral: '',
   plan_tratamiento: '',
   observaciones: '',
+  document_id: '', birth_date: '', address: '', occupation: '', emergency_contact: '', emergency_phone: '',
+  blood_type: '', insurance: '', family_history: '', dental_history: '', oral_hygiene: '', vital_signs: '', diagnosis: '',
 }
 
 function TextArea({ label, icon: Icon, value, onChange, placeholder, rows = 4, colorClass = 'text-zinc-400' }) {
+  const readOnly = useContext(ClinicalReadOnlyContext)
   return (
     <div className="space-y-2 group">
       <Label className="flex items-center gap-2 text-sm font-medium text-zinc-300 group-focus-within:text-white transition-colors">
@@ -103,6 +109,7 @@ function TextArea({ label, icon: Icon, value, onChange, placeholder, rows = 4, c
         onChange={onChange}
         placeholder={placeholder}
         rows={rows}
+        readOnly={readOnly}
         className="flex w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/30 focus:bg-white/[0.05] transition-all duration-300 resize-none leading-relaxed"
       />
     </div>
@@ -112,6 +119,8 @@ function TextArea({ label, icon: Icon, value, onChange, placeholder, rows = 4, c
 export default function HistoriaClinica() {
   const { id: patientId } = useParams()
   const navigate = useNavigate()
+  const { currentUser } = useOutletContext()
+  const readOnly = currentUser?.role === 'administrative'
 
   const [patient, setPatient] = useState(null)
   const [form, setForm] = useState(emptyForm)
@@ -121,9 +130,13 @@ export default function HistoriaClinica() {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [editPatientOpen, setEditPatientOpen] = useState(false)
+  const [savingPatient, setSavingPatient] = useState(false)
+  const [patientEditError, setPatientEditError] = useState('')
+  const [patientForm, setPatientForm] = useState({ first_name:'', first_surname:'', phone_country_code:'+57', phone:'', email:'', gender:'unspecified' })
 
   const token = localStorage.getItem('token')
-  const config = { headers: { Authorization: `Bearer ${token}` } }
+  const config = useMemo(() => ({ headers: { Authorization: `Bearer ${token}` } }), [token])
 
   const fetchData = useCallback(async () => {
     try {
@@ -137,6 +150,7 @@ export default function HistoriaClinica() {
         const h = historyRes.data[0]
         setHistoryId(h.id)
         setForm({
+          ...emptyForm,
           alergias: h.alergias || '',
           enfermedades_sistemicas: h.enfermedades_sistemicas || '',
           medicamentos_actuales: h.medicamentos_actuales || '',
@@ -146,6 +160,9 @@ export default function HistoriaClinica() {
           examen_intraoral: h.examen_intraoral || '',
           plan_tratamiento: h.plan_tratamiento || '',
           observaciones: h.observaciones || '',
+          document_id: h.document_id || '', birth_date: h.birth_date || '', address: h.address || '', occupation: h.occupation || '',
+          emergency_contact: h.emergency_contact || '', emergency_phone: h.emergency_phone || '', blood_type: h.blood_type || '', insurance: h.insurance || '',
+          family_history: h.family_history || '', dental_history: h.dental_history || '', oral_hygiene: h.oral_hygiene || '', vital_signs: h.vital_signs || '', diagnosis: h.diagnosis || '',
         })
       }
     } catch (e) {
@@ -158,15 +175,44 @@ export default function HistoriaClinica() {
     } finally {
       setLoading(false)
     }
-  }, [patientId, navigate])
+  }, [config, patientId, navigate])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData()
   }, [fetchData])
 
   const handleChange = (field) => (e) => {
     setForm((prev) => ({ ...prev, [field]: e.target.value }))
     setSaved(false)
+  }
+
+  const openPatientEditor = () => {
+    setPatientForm({
+      first_name: patient?.first_name || patient?.name || '',
+      first_surname: patient?.first_surname || '',
+      phone_country_code: patient?.phone_country_code || '+57',
+      phone: patient?.phone || '',
+      email: patient?.email || '',
+      gender: patient?.gender || 'unspecified',
+    })
+    setPatientEditError('')
+    setEditPatientOpen(true)
+  }
+
+  const savePatientData = async (event) => {
+    event.preventDefault()
+    setSavingPatient(true)
+    setPatientEditError('')
+    try {
+      const { data } = await axios.put(`${API}/patients/${patientId}`, patientForm, config)
+      setPatient(data)
+      setEditPatientOpen(false)
+    } catch (requestError) {
+      setPatientEditError(requestError.response?.data?.detail || 'No fue posible actualizar los datos personales.')
+    } finally {
+      setSavingPatient(false)
+    }
   }
 
   const handleSave = async () => {
@@ -181,7 +227,7 @@ export default function HistoriaClinica() {
       }
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
-    } catch (e) {
+    } catch {
       setError('Error al guardar la historia clínica')
     } finally {
       setSaving(false)
@@ -218,7 +264,7 @@ export default function HistoriaClinica() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/historia-clinica')}
               className="h-10 w-10 rounded-xl glass border-white/10 text-zinc-400 hover:text-white hover:bg-white/10 transition-all shrink-0"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -238,7 +284,7 @@ export default function HistoriaClinica() {
             </div>
           </div>
 
-          <Button
+          {!readOnly && <Button
             onClick={handleSave}
             disabled={saving}
             className={`rounded-xl font-semibold px-6 transition-all duration-300 ${
@@ -263,7 +309,7 @@ export default function HistoriaClinica() {
                 {historyId ? 'Actualizar' : 'Guardar'}
               </>
             )}
-          </Button>
+          </Button>}
         </header>
 
         {/* Error Banner */}
@@ -302,7 +348,7 @@ export default function HistoriaClinica() {
                 {patient.phone && (
                   <div className="flex items-center gap-2 text-zinc-400 text-sm">
                     <Phone className="w-3.5 h-3.5" />
-                    <span>{patient.phone}</span>
+                    <span>{patient.phone_country_code || ''} {patient.phone}</span>
                   </div>
                 )}
                 {patient.email && (
@@ -311,6 +357,10 @@ export default function HistoriaClinica() {
                     <span>{patient.email}</span>
                   </div>
                 )}
+                <Button type="button" variant="outline" size="sm" onClick={openPatientEditor} className="border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10">
+                  <Pencil className="mr-2 h-3.5 w-3.5" />
+                  Editar datos personales
+                </Button>
                 {historyId && (
                   <div className="ml-auto flex items-center gap-2 text-emerald-400/70 text-xs bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
                     <FileText className="w-3.5 h-3.5" />
@@ -327,6 +377,30 @@ export default function HistoriaClinica() {
             </CardContent>
           </Card>
         )}
+
+        <Dialog open={editPatientOpen} onOpenChange={setEditPatientOpen}>
+          <DialogContent className="glass border-white/10 text-white sm:max-w-lg">
+            <DialogHeader><DialogTitle>Editar datos personales</DialogTitle></DialogHeader>
+            <form onSubmit={savePatientData} className="space-y-4 pt-2">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div><Label htmlFor="patient-first-name">Primer nombre</Label><Input id="patient-first-name" autoFocus required value={patientForm.first_name} onChange={event=>setPatientForm({...patientForm,first_name:event.target.value})} className="mt-1 bg-white/5 border-white/10" /></div>
+                <div><Label htmlFor="patient-first-surname">Primer apellido</Label><Input id="patient-first-surname" value={patientForm.first_surname} onChange={event=>setPatientForm({...patientForm,first_surname:event.target.value})} className="mt-1 bg-white/5 border-white/10" /></div>
+              </div>
+              <div><Label>Celular</Label><div className="mt-1"><PhoneInput id="patient-phone" countryCode={patientForm.phone_country_code} phone={patientForm.phone} onCountryCodeChange={value=>setPatientForm({...patientForm,phone_country_code:value})} onPhoneChange={value=>setPatientForm({...patientForm,phone:value})} /></div></div>
+              <div><Label htmlFor="patient-email">Correo electrónico</Label><Input id="patient-email" type="email" value={patientForm.email} onChange={event=>setPatientForm({...patientForm,email:event.target.value})} className="mt-1 bg-white/5 border-white/10" /></div>
+              {patientEditError&&<p role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">{patientEditError}</p>}
+              <Button disabled={savingPatient} className="w-full">{savingPatient?<Loader2 className="mr-2 h-4 w-4 animate-spin"/>:<Save className="mr-2 h-4 w-4"/>}{savingPatient?'Guardando...':'Guardar datos personales'}</Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        <Card className="glass border-white/10 shadow-lg mb-6"><CardHeader><CardTitle className="text-white">Datos complementarios y valoración integral</CardTitle><p className="text-sm text-zinc-500">Identificación, contacto de emergencia, antecedentes odontológicos y diagnóstico.</p></CardHeader><CardContent className="space-y-5">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">{[
+            ['document_id','Documento','text'],['birth_date','Fecha de nacimiento','date'],['blood_type','Grupo sanguíneo','text'],['occupation','Ocupación','text'],
+            ['address','Dirección','text'],['insurance','EPS / aseguradora','text'],['emergency_contact','Contacto de emergencia','text'],['emergency_phone','Teléfono de emergencia','tel'],
+          ].map(([key,label,type])=><div key={key}><Label>{label}</Label><input type={type} readOnly={readOnly} value={form[key]} onChange={handleChange(key)} className="mt-1 flex h-10 w-full rounded-md border border-white/10 bg-white/[0.03] px-3 text-sm text-white read-only:opacity-70" /></div>)}</div>
+          <ClinicalReadOnlyContext.Provider value={readOnly}><div className="grid md:grid-cols-2 gap-4"><TextArea label="Antecedentes familiares" value={form.family_history} onChange={handleChange('family_history')} placeholder="Diabetes, hipertensión, cardiopatías, enfermedades hereditarias..." rows={3} /><TextArea label="Antecedentes odontológicos" value={form.dental_history} onChange={handleChange('dental_history')} placeholder="Experiencias previas, tratamientos, anestesia, sangrado..." rows={3} /><TextArea label="Hábitos de higiene oral" value={form.oral_hygiene} onChange={handleChange('oral_hygiene')} placeholder="Frecuencia de cepillado, seda dental, enjuague..." rows={3} /><TextArea label="Signos vitales" value={form.vital_signs} onChange={handleChange('vital_signs')} placeholder="Presión arterial, frecuencia cardíaca, temperatura..." rows={3} /><div className="md:col-span-2"><TextArea label="Diagnóstico integral" value={form.diagnosis} onChange={handleChange('diagnosis')} placeholder="Diagnóstico clínico sustentado en examen e información del odontograma..." rows={4} /></div></div></ClinicalReadOnlyContext.Provider>
+        </CardContent></Card>
 
         {/* Tab Navigation */}
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
@@ -352,8 +426,9 @@ export default function HistoriaClinica() {
           })}
         </div>
 
+        {readOnly && <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">Modo de consulta: el personal administrativo puede visualizar este expediente, pero no modificarlo.</div>}
         {/* Tab Content */}
-        <div className="space-y-6">
+        <ClinicalReadOnlyContext.Provider value={readOnly}><div className="space-y-6">
           {/* Motivo de Consulta */}
           {activeTab === 'motivo' && (
             <Card className={`glass border-white/10 shadow-lg overflow-hidden`}>
@@ -518,6 +593,7 @@ export default function HistoriaClinica() {
                 </p>
               </CardHeader>
               <CardContent className="relative space-y-6">
+                <Button type="button" variant="outline" onClick={() => navigate(`/pacientes/${patientId}?tab=treatments`)} className="border-emerald-500/30 text-emerald-300"><ClipboardList className="w-4 h-4 mr-2" />Abrir plan estructurado, costos y odontograma</Button>
                 <TextArea
                   label="Plan de Tratamiento"
                   icon={ClipboardList}
@@ -530,7 +606,7 @@ export default function HistoriaClinica() {
               </CardContent>
             </Card>
           )}
-        </div>
+        </div></ClinicalReadOnlyContext.Provider>
 
         {/* Bottom Save Bar (mobile-friendly) */}
         <div className="mt-8 glass rounded-2xl border-white/10 p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -542,7 +618,7 @@ export default function HistoriaClinica() {
               <span>Nuevo expediente — complete los campos y guarde cuando esté listo</span>
             )}
           </div>
-          <Button
+          {!readOnly && <Button
             onClick={handleSave}
             disabled={saving}
             className={`rounded-xl font-semibold px-8 transition-all duration-300 w-full sm:w-auto ${
@@ -567,7 +643,7 @@ export default function HistoriaClinica() {
                 {historyId ? 'Actualizar Historia Clínica' : 'Guardar Historia Clínica'}
               </>
             )}
-          </Button>
+          </Button>}
         </div>
       </div>
     </div>

@@ -1,64 +1,64 @@
-import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
-  Activity, Users, Calendar, MessageCircle, FileText, 
-  CreditCard, Video, Mail, ClipboardList, Settings,
-  ChevronLeft, ChevronRight, LogOut, Stethoscope,
-  BarChart3, Building2, FlaskConical, PenTool
+  Activity, FileText, CreditCard, Calendar, Boxes, BarChart3, BellRing, Settings2,
+  ChevronLeft, ChevronRight, LogOut, Stethoscope, X, UsersRound, Moon, Sun, Waves,
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { LanguageToggle, useLanguage } from '@/lib/i18n'
 
 const menuItems = [
   { 
-    section: 'Principal',
+    section: 'Principal', sectionKey:'main',
     items: [
-      { icon: Activity, label: 'Dashboard', path: '/', badge: null },
-      { icon: Users, label: 'Pacientes', path: '/pacientes', badge: null },
-      { icon: Calendar, label: 'Agenda', path: '/agenda', badge: null },
+      { icon: Calendar, label: 'Agenda', labelKey:'agenda', path: '/agenda', badge: null },
     ]
   },
   {
-    section: 'Clínico',
+    section: 'Comunicación', sectionKey:'communication',
     items: [
-      { icon: FileText, label: 'Historia Clínica', path: '/historia-clinica', badge: null },
-      { icon: Stethoscope, label: 'Odontograma', path: '/odontograma', badge: 'Nuevo' },
-      { icon: ClipboardList, label: 'Tratamientos', path: '/tratamientos', badge: null },
+      { icon: BellRing, label: 'Recordatorios', labelKey:'reminders', path: '/recordatorios', badge: null },
     ]
   },
   {
-    section: 'Comunicación',
+    section: 'Clínico', sectionKey:'clinical',
     items: [
-      { icon: MessageCircle, label: 'Chat WhatsApp', path: '/chat', badge: null },
-      { icon: Mail, label: 'Email Marketing', path: '/email-marketing', badge: 'Próx.' },
-      { icon: Video, label: 'Telemedicina', path: '/telemedicina', badge: 'Próx.' },
+      { icon: FileText, label: 'Historia Clínica', labelKey:'history', path: '/historia-clinica', match: 'historia-clinica', badge: null },
+      { icon: Stethoscope, label: 'Odontograma', labelKey:'odontogram', path: '/odontograma', match: 'odontograma', badge: null },
+      { icon: Waves, label: 'Periodontograma', labelKey:'periodontogram', path: '/periodontograma', match: 'periodontograma', badge: null },
     ]
   },
   {
-    section: 'Finanzas',
+    section: 'Finanzas', sectionKey:'finance',
     items: [
-      { icon: CreditCard, label: 'Pagos y Caja', path: '/pagos', badge: 'Próx.' },
-      { icon: BarChart3, label: 'Reportes', path: '/reportes', badge: 'Próx.' },
+      { icon: CreditCard, label: 'Pagos y Caja', labelKey:'payments', path: '/pagos', badge: 'Demo' },
+      { icon: Boxes, label: 'Inventario', labelKey:'inventory', path: '/inventario', badge: null },
+      { icon: BarChart3, label: 'Reportes', labelKey:'reports', path: '/reportes', badge: null, allowedRoles: ['admin', 'administrative'] },
     ]
   },
   {
-    section: 'Administración',
+    section: 'Resumen', sectionKey:'summary',
     items: [
-      { icon: Building2, label: 'Laboratorios', path: '/laboratorios', badge: 'Próx.' },
-      { icon: PenTool, label: 'Firma Digital', path: '/firma-digital', badge: 'Próx.' },
-      { icon: Settings, label: 'Configuración', path: '/configuracion', badge: null },
+      { icon: Activity, label: 'Dashboard', labelKey:'dashboard', path: '/dashboard', badge: null },
+    ]
+  },
+  {
+    section: 'Configuración', sectionKey:'settings',
+    items: [
+      { icon: Settings2, label: 'Integraciones', labelKey:'integrations', path: '/integraciones', badge: null, adminOnly: true },
+      { icon: UsersRound, label: 'Equipo', labelKey:'team', path: '/personal', badge: null, ownerOnly: true },
     ]
   },
 ]
 
-export function Sidebar({ onLogout }) {
-  const [collapsed, setCollapsed] = useState(false)
+export function Sidebar({ collapsed, mobileOpen, onMobileClose, onCollapsedChange, onLogout, currentUser, theme, onThemeChange }) {
+  const {t}=useLanguage()
   const navigate = useNavigate()
   const location = useLocation()
 
   return (
     <aside 
-      className={`fixed left-0 top-0 h-screen z-50 flex flex-col transition-all duration-300 ease-in-out
-        ${collapsed ? 'w-[72px]' : 'w-[260px]'}
+      className={`fixed left-0 top-0 h-screen z-50 flex flex-col transition-all duration-300 ease-in-out w-[280px]
+        ${collapsed ? 'lg:w-[72px]' : 'lg:w-[260px]'}
+        ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         glass border-r border-white/10 bg-black/40`}
     >
       {/* Logo */}
@@ -68,42 +68,46 @@ export function Sidebar({ onLogout }) {
         </div>
         {!collapsed && (
           <div className="overflow-hidden transition-all duration-300">
-            <h2 className="text-lg font-bold text-white tracking-tight whitespace-nowrap">DentalPro</h2>
-            <p className="text-[10px] text-zinc-500 whitespace-nowrap">Panel Clínico</p>
+            <h2 className="text-lg font-bold text-white tracking-tight whitespace-nowrap">OdontoSpace</h2>
+            <p className="max-w-[170px] truncate text-[11px] font-medium text-primary">{currentUser?.clinic_name || t('clinicManagement')}</p>
           </div>
         )}
+        <button type="button" onClick={onMobileClose} aria-label="Cerrar menú" className="ml-auto p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 lg:hidden">
+          <X className="w-5 h-5" />
+        </button>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4 scrollbar-thin scrollbar-thumb-white/10">
+      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {menuItems.map((group) => (
           <div key={group.section}>
             {!collapsed && (
               <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold px-3 mb-2">
-                {group.section}
+                {t(`sections.${group.sectionKey}`)}
               </p>
             )}
             <div className="space-y-0.5">
-              {group.items.map((item) => {
-                const isActive = location.pathname === item.path || 
+              {group.items.filter((item) => (!item.adminOnly || currentUser?.role === 'admin') && (!item.ownerOnly || currentUser?.is_clinic_owner) && (!item.allowedRoles || item.allowedRoles.includes(currentUser?.role))).map((item) => {
+                const isActive = location.pathname === item.path ||
+                  (item.match && location.pathname.includes(item.match)) ||
                   (item.path !== '/' && location.pathname.startsWith(item.path))
                 const Icon = item.icon
                 
                 return (
                   <button
                     key={item.path}
-                    onClick={() => navigate(item.path)}
+                    onClick={() => { navigate(item.path); onMobileClose() }}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
                       ${isActive 
                         ? 'bg-primary/15 text-primary shadow-sm shadow-primary/5 ring-1 ring-primary/20' 
                         : 'text-zinc-400 hover:text-white hover:bg-white/5'}
                       ${collapsed ? 'justify-center' : ''}`}
-                    title={collapsed ? item.label : undefined}
+                    title={collapsed ? t(`menu.${item.labelKey}`) : undefined}
                   >
                     <Icon className={`w-[18px] h-[18px] shrink-0 transition-colors ${isActive ? 'text-primary' : ''}`} />
                     {!collapsed && (
                       <>
-                        <span className="whitespace-nowrap">{item.label}</span>
+                        <span className="whitespace-nowrap">{t(`menu.${item.labelKey}`)}</span>
                         {item.badge && (
                           <span className={`ml-auto text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full whitespace-nowrap
                             ${item.badge === 'Nuevo' 
@@ -124,19 +128,30 @@ export function Sidebar({ onLogout }) {
 
       {/* Footer */}
       <div className="border-t border-white/10 p-3 space-y-2">
+        <div className={`flex ${collapsed?'justify-center':'justify-between'} items-center`}>{!collapsed&&<span className="px-2 text-xs text-zinc-500">{t('language')}</span>}<LanguageToggle compact={collapsed}/></div>
+        {!collapsed && currentUser && <div className="px-3 py-2 rounded-xl bg-white/[0.03]"><p className="truncate text-xs font-medium text-zinc-200">{currentUser.display_name || currentUser.full_name || currentUser.email || currentUser.username}</p><p className="mt-0.5 text-[10px] uppercase tracking-wide text-zinc-500">{{ admin: 'Administrador', dentist: 'Odontólogo general', specialist: 'Especialista', administrative: 'Personal administrativo' }[currentUser.role] || currentUser.role}</p></div>}
         <button
-          onClick={onLogout}
+          type="button"
+          onClick={onThemeChange}
+          className={`theme-switch w-full flex items-center gap-3 rounded-xl border border-white/10 px-3 py-2.5 text-sm font-medium text-zinc-300 hover:bg-white/5 transition-all ${collapsed ? 'justify-center' : ''}`}
+          title={collapsed ? (theme === 'dark' ? 'Activar tema claro' : 'Activar tema oscuro') : undefined}
+        >
+          {theme === 'dark' ? <Sun className="h-[18px] w-[18px] shrink-0 text-amber-400" /> : <Moon className="h-[18px] w-[18px] shrink-0 text-blue-600" />}
+          {!collapsed && <span>{theme === 'dark' ? t('lightTheme') : t('darkTheme')}</span>}
+        </button>
+        <button
+          onClick={() => { onMobileClose(); onLogout() }}
           className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all
             ${collapsed ? 'justify-center' : ''}`}
           title={collapsed ? 'Cerrar Sesión' : undefined}
         >
           <LogOut className="w-[18px] h-[18px] shrink-0" />
-          {!collapsed && <span>Cerrar Sesión</span>}
+          {!collapsed && <span>{t('logout')}</span>}
         </button>
         
         <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="w-full flex items-center justify-center p-2 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/5 transition-all"
+          onClick={() => onCollapsedChange(!collapsed)}
+          className="hidden lg:flex w-full items-center justify-center p-2 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/5 transition-all"
         >
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </button>
