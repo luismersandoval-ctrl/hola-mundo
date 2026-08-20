@@ -384,7 +384,7 @@ export default function HistoriaClinica() {
                   </div>
                 )}
                 {!historyId && (
-                  <div className="ml-auto flex items-center gap-2 text-amber-400/70 text-xs bg-amber-500/10 px-3 py-1.5 rounded-full border border-amber-500/20">
+                  <div className="ml-auto flex items-center gap-2 rounded-full border border-blue-300 bg-blue-100 px-3 py-1.5 text-xs font-semibold text-blue-800 dark:border-blue-400/30 dark:bg-blue-500/15 dark:text-blue-200">
                     <FileText className="w-3.5 h-3.5" />
                     Nuevo expediente
                   </div>
