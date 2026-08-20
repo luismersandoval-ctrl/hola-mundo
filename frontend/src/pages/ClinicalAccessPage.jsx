@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { FileText, Loader2, Search, Stethoscope, UserRound, Waves } from 'lucide-react'
+import { FileText, Loader2, Search, Stethoscope, UserPlus, UserRound, Waves } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { CompletePatientDialog } from '@/components/CompletePatientDialog'
 
 const API = '/api'
 
@@ -13,6 +15,7 @@ export default function ClinicalAccessPage({ mode }) {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [registerOpen, setRegisterOpen] = useState(false)
   const isHistory = mode === 'history'
   const isPeriodontogram = mode === 'periodontogram'
   const title = isHistory ? 'Historias Clínicas' : isPeriodontogram ? 'Periodontogramas' : 'Odontogramas'
@@ -60,7 +63,7 @@ export default function ClinicalAccessPage({ mode }) {
     <div className="min-h-screen p-4 md:p-8 relative overflow-hidden">
       <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-primary/10 blur-[150px] pointer-events-none" />
       <div className="max-w-5xl mx-auto relative z-10">
-        <header className="glass p-5 rounded-2xl border-white/10 shadow-lg mb-6">
+        <header className="glass flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl border-white/10 shadow-lg mb-6">
           <div className="flex items-center gap-4">
             <div className="p-2.5 bg-primary/20 rounded-xl ring-1 ring-primary/30">
               <Icon className="w-6 h-6 text-primary" />
@@ -70,7 +73,9 @@ export default function ClinicalAccessPage({ mode }) {
               <p className="text-sm text-zinc-400">{description}</p>
             </div>
           </div>
+          {isHistory&&<Button onClick={()=>setRegisterOpen(true)}><UserPlus className="mr-2 h-4 w-4"/>Registrar paciente completo</Button>}
         </header>
+        {isHistory&&<CompletePatientDialog open={registerOpen} onOpenChange={setRegisterOpen} onCreated={(patient)=>navigate(`/pacientes/${patient.id}/historia-clinica`)}/>}
 
         <Card className="glass border-white/10 shadow-lg">
           <CardHeader>

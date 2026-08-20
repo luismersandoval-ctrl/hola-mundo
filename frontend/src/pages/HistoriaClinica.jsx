@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { PhoneInput } from '@/components/PhoneInput'
+import { PatientImaging } from '@/components/PatientImaging'
 import {
   ArrowLeft,
   Save,
@@ -25,6 +26,7 @@ import {
   Phone,
   Mail,
   Pencil,
+  Images,
 } from 'lucide-react'
 
 const API = '/api'
@@ -80,6 +82,18 @@ const TABS = [
     bgHover: 'hover:bg-emerald-500/15',
     border: 'border-emerald-500/20',
   },
+  {
+    id: 'imagenes',
+    label: 'Imágenes diagnósticas',
+    icon: Images,
+    color: 'cyan',
+    gradient: 'from-cyan-500/20 to-cyan-600/5',
+    ring: 'ring-cyan-500/30',
+    text: 'text-cyan-400',
+    bg: 'bg-cyan-500/10',
+    bgHover: 'hover:bg-cyan-500/15',
+    border: 'border-cyan-500/20',
+  },
 ]
 
 const emptyForm = {
@@ -105,6 +119,7 @@ function TextArea({ label, icon: Icon, value, onChange, placeholder, rows = 4, c
         {label}
       </Label>
       <textarea
+        maxLength={12000}
         value={value}
         onChange={onChange}
         placeholder={placeholder}
@@ -146,6 +161,7 @@ export default function HistoriaClinica() {
         axios.get(`${API}/patients/${patientId}/clinical-history`, config),
       ])
       setPatient(patientRes.data)
+      setForm((current) => ({...current, birth_date: patientRes.data.birth_date || current.birth_date}))
       if (historyRes.data.length > 0) {
         const h = historyRes.data[0]
         setHistoryId(h.id)
@@ -160,7 +176,7 @@ export default function HistoriaClinica() {
           examen_intraoral: h.examen_intraoral || '',
           plan_tratamiento: h.plan_tratamiento || '',
           observaciones: h.observaciones || '',
-          document_id: h.document_id || '', birth_date: h.birth_date || '', address: h.address || '', occupation: h.occupation || '',
+          document_id: h.document_id || '', birth_date: h.birth_date || patientRes.data.birth_date || '', address: h.address || '', occupation: h.occupation || '',
           emergency_contact: h.emergency_contact || '', emergency_phone: h.emergency_phone || '', blood_type: h.blood_type || '', insurance: h.insurance || '',
           family_history: h.family_history || '', dental_history: h.dental_history || '', oral_hygiene: h.oral_hygiene || '', vital_signs: h.vital_signs || '', diagnosis: h.diagnosis || '',
         })
@@ -593,7 +609,7 @@ export default function HistoriaClinica() {
                 </p>
               </CardHeader>
               <CardContent className="relative space-y-6">
-                <Button type="button" variant="outline" onClick={() => navigate(`/pacientes/${patientId}?tab=treatments`)} className="border-emerald-500/30 text-emerald-300"><ClipboardList className="w-4 h-4 mr-2" />Abrir plan estructurado, costos y odontograma</Button>
+                <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={() => navigate(`/pacientes/${patientId}?tab=treatments`)} className="border-emerald-500/30 text-emerald-300"><ClipboardList className="w-4 h-4 mr-2" />Abrir plan estructurado, costos y odontograma</Button>{['dentist','specialist'].includes(currentUser?.role)&&<Button type="button" variant="outline" onClick={() => navigate(`/pacientes/${patientId}?tab=evolutions`)} className="border-blue-500/30 text-blue-300"><FileText className="mr-2 h-4 w-4"/>Registrar evolución clínica</Button>}</div>
                 <TextArea
                   label="Plan de Tratamiento"
                   icon={ClipboardList}
@@ -605,6 +621,10 @@ export default function HistoriaClinica() {
                 />
               </CardContent>
             </Card>
+          )}
+
+          {activeTab === 'imagenes' && (
+            <PatientImaging patientId={patientId} readOnly={readOnly} />
           )}
         </div></ClinicalReadOnlyContext.Provider>
 
