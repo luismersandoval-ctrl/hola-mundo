@@ -119,15 +119,11 @@ const emptyForm = {
   diagnosis_type: '', related_diagnoses: '', diagnostic_impression: '',
 }
 
-const CONSULTATION_PURPOSES = ['Detección de alteraciones de crecimiento y desarrollo', 'Detección de alteraciones del joven', 'Detección de alteraciones del adulto', 'Detección de enfermedad profesional', 'No aplica']
-const EXTERNAL_CAUSES = ['Enfermedad general', 'Enfermedad profesional', 'Accidente de trabajo', 'Accidente de tránsito', 'Accidente rábico', 'Accidente ofídico', 'Otro tipo de accidente', 'Evento catastrófico', 'Lesión por agresión', 'Lesión autoinfligida', 'Sospecha de maltrato físico', 'Sospecha de abuso sexual', 'Sospecha de violencia sexual', 'Sospecha de maltrato emocional']
-const DIAGNOSIS_TYPES = ['Impresión diagnóstica', 'Confirmado nuevo', 'Confirmado repetido']
-
 function TextArea({ label, icon: Icon, value, onChange, placeholder, rows = 4, colorClass = 'text-zinc-400' }) {
   const readOnly = useContext(ClinicalReadOnlyContext)
   return (
     <div className="space-y-2 group">
-      <Label className="flex items-center gap-2 text-sm font-medium text-zinc-300 group-focus-within:text-white transition-colors">
+      <Label className="flex items-center gap-2 text-sm font-medium text-zinc-800 transition-colors group-focus-within:text-zinc-950 dark:text-zinc-300 dark:group-focus-within:text-white">
         {Icon && <Icon className={`w-4 h-4 ${colorClass}`} />}
         {label}
       </Label>
@@ -168,6 +164,7 @@ export default function HistoriaClinica() {
   const [cupsResults, setCupsResults] = useState([])
   const [cupsTotal, setCupsTotal] = useState(0)
   const [cupsLoading, setCupsLoading] = useState(false)
+  const [cupsError, setCupsError] = useState('')
 
   const token = localStorage.getItem('token')
   const config = useMemo(() => ({ headers: { Authorization: `Bearer ${token}` } }), [token])
@@ -224,12 +221,15 @@ export default function HistoriaClinica() {
     if (!cupsOpen) return undefined
     const requestTimer = window.setTimeout(async () => {
       setCupsLoading(true)
+      setCupsError('')
       try {
         const { data } = await axios.get(`${API}/catalogs/cups`, { ...config, params: { search: cupsSearch, category: cupsCategory, limit: 60 } })
         setCupsResults(data.items)
         setCupsTotal(data.total)
-      } catch {
+      } catch (requestError) {
         setCupsResults([])
+        setCupsTotal(0)
+        setCupsError(requestError.response?.status === 404 ? 'El servidor necesita reiniciarse para cargar el catálogo CUPS 2026.' : 'No fue posible consultar el catálogo CUPS. Intenta nuevamente.')
       } finally {
         setCupsLoading(false)
       }
@@ -465,13 +465,14 @@ export default function HistoriaClinica() {
                 <button type="button" onClick={() => setCupsCategory('all')} className={`px-3 py-2 text-sm font-semibold ${cupsCategory === 'all' ? 'border-b-2 border-primary text-primary' : 'text-zinc-400'}`}>Todos los CUPS</button>
               </div>
               <p className="text-xs text-zinc-400">{cupsLoading ? 'Buscando...' : `${cupsTotal.toLocaleString('es-CO')} resultados · se muestran hasta 60`}</p>
+              {cupsError && <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">{cupsError}</div>}
               <div className="max-h-[50vh] overflow-y-auto rounded-xl border border-white/10">
                 {cupsResults.map((item) => <button key={item.code} type="button" onClick={() => selectCups(item)} className="grid w-full grid-cols-[90px_1fr_auto] items-center gap-3 border-b border-white/10 px-4 py-3 text-left hover:bg-primary/10">
                   <span className="font-mono text-sm font-semibold text-primary">{item.code}</span>
                   <span className="text-sm text-zinc-800 dark:text-zinc-100">{item.name}</span>
                   {item.priority && <span className="rounded-full bg-violet-500/15 px-2 py-1 text-[10px] font-bold text-violet-700 dark:text-violet-300">FRECUENTE</span>}
                 </button>)}
-                {!cupsLoading && cupsResults.length === 0 && <p className="p-8 text-center text-sm text-zinc-400">No se encontraron códigos con ese criterio.</p>}
+                {!cupsLoading && !cupsError && cupsResults.length === 0 && <p className="p-8 text-center text-sm text-zinc-400">No se encontraron códigos con ese criterio.</p>}
               </div>
             </div>
           </DialogContent>
@@ -534,7 +535,7 @@ export default function HistoriaClinica() {
                 <CardContent className="space-y-5">
                   <div><Label>Tipo de consulta o procedimiento CUPS</Label><div className="mt-1 flex gap-2"><Input readOnly value={form.cups_code ? `${form.cups_code} · ${form.cups_name}` : ''} placeholder="Selecciona un código CUPS..." className="border-white/10 bg-white/5" /><Button type="button" variant="outline" disabled={readOnly} onClick={() => setCupsOpen(true)} className="shrink-0 border-violet-500/30 text-violet-700 dark:text-violet-200"><Search className="mr-2 h-4 w-4" />Buscar CUPS</Button></div></div>
                   <div className="grid gap-4 md:grid-cols-3">
-                    {[['consultation_purpose','Finalidad de consulta',CONSULTATION_PURPOSES],['external_cause','Causa externa',EXTERNAL_CAUSES],['diagnosis_type','Tipo de diagnóstico',DIAGNOSIS_TYPES]].map(([field,label,options]) => <div key={field}><Label>{label}</Label><select disabled={readOnly} value={form[field]} onChange={handleChange(field)} className="mt-1 h-10 w-full rounded-md border border-white/10 bg-background px-3 text-sm text-foreground"><option value="">Seleccione...</option>{options.map(option => <option key={option} value={option}>{option}</option>)}</select></div>)}
+                    {[['consultation_purpose','Finalidad de consulta','Ej: valoración odontológica integral'],['external_cause','Causa externa','Ej: enfermedad general'],['diagnosis_type','Tipo de diagnóstico','Ej: impresión diagnóstica']].map(([field,label,placeholder]) => <div key={field}><Label className="text-zinc-800 dark:text-zinc-300">{label}</Label><Input disabled={readOnly} maxLength={500} value={form[field]} onChange={handleChange(field)} placeholder={placeholder} className="mt-1 border-white/10 bg-white/5 text-zinc-950 placeholder:text-zinc-500 dark:text-white" /></div>)}
                   </div>
                   <div className="grid gap-5 md:grid-cols-2"><TextArea label="Diagnósticos relacionados" value={form.related_diagnoses} onChange={handleChange('related_diagnoses')} placeholder="Códigos y descripciones de diagnósticos relacionados..." rows={4} /><TextArea label="Impresión diagnóstica" value={form.diagnostic_impression} onChange={handleChange('diagnostic_impression')} placeholder="Impresión clínica sustentada en la valoración..." rows={4} /></div>
                   <p className="text-xs text-zinc-500">Catálogo CUPS 2026: 13.640 registros, Resolución 2706 de 2025. Los diagnósticos CIE-10 se integrarán desde su catálogo oficial correspondiente.</p>
