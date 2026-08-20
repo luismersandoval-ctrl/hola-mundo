@@ -7,6 +7,7 @@ from sqlalchemy import func, text
 from datetime import date, timedelta, datetime
 from typing import List
 import os
+import csv
 import json
 import hashlib
 import hmac
@@ -14,6 +15,8 @@ import re
 import secrets
 import smtplib
 import uuid
+import unicodedata
+from functools import lru_cache
 from email.message import EmailMessage
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -24,6 +27,23 @@ DIAGNOSTIC_UPLOAD_ROOT = Path(os.environ.get("DIAGNOSTIC_UPLOAD_ROOT", Path(__fi
 DIAGNOSTIC_UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 ALLOWED_DIAGNOSTIC_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf", "application/dicom", "application/octet-stream"}
 MAX_DIAGNOSTIC_FILE_SIZE = 25 * 1024 * 1024
+CUPS_CATALOG_PATH = Path(__file__).resolve().parent / "data" / "cups_2026.csv"
+
+
+def normalize_catalog_search(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value or "")
+    return "".join(character for character in normalized if not unicodedata.combining(character)).casefold()
+
+
+@lru_cache(maxsize=1)
+def load_cups_catalog():
+    with CUPS_CATALOG_PATH.open(encoding="utf-8", newline="") as catalog_file:
+        rows = list(csv.DictReader(catalog_file))
+    for row in rows:
+        row["search_text"] = normalize_catalog_search(f"{row['code']} {row['name']}")
+        row["odontology"] = row["odontology"] == "1"
+        row["priority"] = row["priority"] == "1"
+    return rows
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -116,6 +136,11 @@ def migrate_existing_database():
             "occupation": "VARCHAR DEFAULT ''", "emergency_contact": "VARCHAR DEFAULT ''", "emergency_relationship": "VARCHAR DEFAULT ''", "emergency_phone": "VARCHAR DEFAULT ''",
             "blood_type": "VARCHAR DEFAULT ''", "insurance": "VARCHAR DEFAULT ''", "family_history": "TEXT DEFAULT ''",
             "dental_history": "TEXT DEFAULT ''", "oral_hygiene": "TEXT DEFAULT ''", "vital_signs": "TEXT DEFAULT ''", "diagnosis": "TEXT DEFAULT ''",
+            "current_illness": "TEXT DEFAULT ''", "personal_history": "TEXT DEFAULT ''", "pathological_history": "TEXT DEFAULT ''",
+            "pharmacological_history": "TEXT DEFAULT ''", "systems_review": "TEXT DEFAULT ''", "physical_exam": "TEXT DEFAULT ''",
+            "risk_factors": "TEXT DEFAULT ''", "cups_code": "VARCHAR DEFAULT ''", "cups_name": "TEXT DEFAULT ''",
+            "consultation_purpose": "VARCHAR DEFAULT ''", "external_cause": "VARCHAR DEFAULT ''", "diagnosis_type": "VARCHAR DEFAULT ''",
+            "related_diagnoses": "TEXT DEFAULT ''", "diagnostic_impression": "TEXT DEFAULT ''",
         }
         for column, definition in history_additions.items():
             if column not in history_columns:
@@ -783,6 +808,27 @@ def create_medical_history(patient_id: int, history: schemas.MedicalHistoryCreat
     return db_history
 
 # Clinical History CRUD
+@app.get("/catalogs/cups")
+def search_cups_catalog(
+    search: str = Query("", max_length=120),
+    category: str = Query("odontology", pattern=r"^(odontology|all)$"),
+    limit: int = Query(50, ge=1, le=100),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    """Search the official 2026 CUPS catalog by code or procedure name."""
+    del current_user
+    normalized_search = normalize_catalog_search(search.strip())
+    matches = []
+    for item in load_cups_catalog():
+        if category == "odontology" and not item["odontology"]:
+            continue
+        if normalized_search and normalized_search not in item["search_text"]:
+            continue
+        matches.append({key: value for key, value in item.items() if key != "search_text"})
+    matches.sort(key=lambda item: (not item["priority"], item["code"]))
+    return {"items": matches[:limit], "total": len(matches), "category": category}
+
+
 @app.get("/patients/{patient_id}/clinical-history", response_model=List[schemas.ClinicalHistory])
 def get_clinical_history(patient_id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     clinic_patient(db, patient_id, current_user)

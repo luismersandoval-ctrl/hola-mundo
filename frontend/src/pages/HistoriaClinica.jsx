@@ -27,6 +27,7 @@ import {
   Mail,
   Pencil,
   Images,
+  BookOpenCheck,
 } from 'lucide-react'
 
 const API = '/api'
@@ -34,6 +35,11 @@ const ClinicalReadOnlyContext = createContext(false)
 
 // Tab definitions with color schemes
 const TABS = [
+  {
+    id: 'anamnesis', label: 'Anamnesis', icon: BookOpenCheck, color: 'violet',
+    gradient: 'from-violet-500/20 to-violet-600/5', ring: 'ring-violet-500/30',
+    text: 'text-violet-500 dark:text-violet-300', bg: 'bg-violet-500/10', bgHover: 'hover:bg-violet-500/15', border: 'border-violet-500/30',
+  },
   {
     id: 'motivo',
     label: 'Motivo de Consulta',
@@ -108,7 +114,14 @@ const emptyForm = {
   observaciones: '',
   document_id: '', birth_date: '', address: '', occupation: '', emergency_contact: '', emergency_relationship: '', emergency_phone: '',
   blood_type: '', insurance: '', family_history: '', dental_history: '', oral_hygiene: '', vital_signs: '', diagnosis: '',
+  current_illness: '', personal_history: '', pathological_history: '', pharmacological_history: '', systems_review: '',
+  physical_exam: '', risk_factors: '', cups_code: '', cups_name: '', consultation_purpose: '', external_cause: '',
+  diagnosis_type: '', related_diagnoses: '', diagnostic_impression: '',
 }
+
+const CONSULTATION_PURPOSES = ['Detección de alteraciones de crecimiento y desarrollo', 'Detección de alteraciones del joven', 'Detección de alteraciones del adulto', 'Detección de enfermedad profesional', 'No aplica']
+const EXTERNAL_CAUSES = ['Enfermedad general', 'Enfermedad profesional', 'Accidente de trabajo', 'Accidente de tránsito', 'Accidente rábico', 'Accidente ofídico', 'Otro tipo de accidente', 'Evento catastrófico', 'Lesión por agresión', 'Lesión autoinfligida', 'Sospecha de maltrato físico', 'Sospecha de abuso sexual', 'Sospecha de violencia sexual', 'Sospecha de maltrato emocional']
+const DIAGNOSIS_TYPES = ['Impresión diagnóstica', 'Confirmado nuevo', 'Confirmado repetido']
 
 function TextArea({ label, icon: Icon, value, onChange, placeholder, rows = 4, colorClass = 'text-zinc-400' }) {
   const readOnly = useContext(ClinicalReadOnlyContext)
@@ -149,6 +162,12 @@ export default function HistoriaClinica() {
   const [savingPatient, setSavingPatient] = useState(false)
   const [patientEditError, setPatientEditError] = useState('')
   const [patientForm, setPatientForm] = useState({ first_name:'', first_surname:'', phone_country_code:'+57', phone:'', email:'', gender:'unspecified' })
+  const [cupsOpen, setCupsOpen] = useState(false)
+  const [cupsCategory, setCupsCategory] = useState('odontology')
+  const [cupsSearch, setCupsSearch] = useState('')
+  const [cupsResults, setCupsResults] = useState([])
+  const [cupsTotal, setCupsTotal] = useState(0)
+  const [cupsLoading, setCupsLoading] = useState(false)
 
   const token = localStorage.getItem('token')
   const config = useMemo(() => ({ headers: { Authorization: `Bearer ${token}` } }), [token])
@@ -179,6 +198,9 @@ export default function HistoriaClinica() {
           document_id: h.document_id || '', birth_date: h.birth_date || patientRes.data.birth_date || '', address: h.address || '', occupation: h.occupation || '',
           emergency_contact: h.emergency_contact || '', emergency_relationship: h.emergency_relationship || '', emergency_phone: h.emergency_phone || '', blood_type: h.blood_type || '', insurance: h.insurance || '',
           family_history: h.family_history || '', dental_history: h.dental_history || '', oral_hygiene: h.oral_hygiene || '', vital_signs: h.vital_signs || '', diagnosis: h.diagnosis || '',
+          current_illness: h.current_illness || '', personal_history: h.personal_history || '', pathological_history: h.pathological_history || '', pharmacological_history: h.pharmacological_history || '',
+          systems_review: h.systems_review || '', physical_exam: h.physical_exam || '', risk_factors: h.risk_factors || '', cups_code: h.cups_code || '', cups_name: h.cups_name || '',
+          consultation_purpose: h.consultation_purpose || '', external_cause: h.external_cause || '', diagnosis_type: h.diagnosis_type || '', related_diagnoses: h.related_diagnoses || '', diagnostic_impression: h.diagnostic_impression || '',
         })
       }
     } catch (e) {
@@ -197,6 +219,29 @@ export default function HistoriaClinica() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData()
   }, [fetchData])
+
+  useEffect(() => {
+    if (!cupsOpen) return undefined
+    const requestTimer = window.setTimeout(async () => {
+      setCupsLoading(true)
+      try {
+        const { data } = await axios.get(`${API}/catalogs/cups`, { ...config, params: { search: cupsSearch, category: cupsCategory, limit: 60 } })
+        setCupsResults(data.items)
+        setCupsTotal(data.total)
+      } catch {
+        setCupsResults([])
+      } finally {
+        setCupsLoading(false)
+      }
+    }, 200)
+    return () => window.clearTimeout(requestTimer)
+  }, [cupsOpen, cupsSearch, cupsCategory, config])
+
+  const selectCups = (item) => {
+    setForm((current) => ({ ...current, cups_code: item.code, cups_name: item.name }))
+    setSaved(false)
+    setCupsOpen(false)
+  }
 
   const handleChange = (field) => (e) => {
     setForm((prev) => ({ ...prev, [field]: e.target.value }))
@@ -410,6 +455,28 @@ export default function HistoriaClinica() {
           </DialogContent>
         </Dialog>
 
+        <Dialog open={cupsOpen} onOpenChange={setCupsOpen}>
+          <DialogContent className="glass max-h-[82vh] overflow-hidden border-white/10 text-white sm:max-w-4xl">
+            <DialogHeader><DialogTitle>Tipos de consulta y procedimientos CUPS 2026</DialogTitle></DialogHeader>
+            <div className="space-y-4 overflow-hidden">
+              <Input value={cupsSearch} onChange={(event) => setCupsSearch(event.target.value)} placeholder="Buscar por código o descripción..." className="border-white/10 bg-white/5" autoFocus />
+              <div className="flex gap-2 border-b border-white/10">
+                <button type="button" onClick={() => setCupsCategory('odontology')} className={`px-3 py-2 text-sm font-semibold ${cupsCategory === 'odontology' ? 'border-b-2 border-primary text-primary' : 'text-zinc-400'}`}>Usados en odontología</button>
+                <button type="button" onClick={() => setCupsCategory('all')} className={`px-3 py-2 text-sm font-semibold ${cupsCategory === 'all' ? 'border-b-2 border-primary text-primary' : 'text-zinc-400'}`}>Todos los CUPS</button>
+              </div>
+              <p className="text-xs text-zinc-400">{cupsLoading ? 'Buscando...' : `${cupsTotal.toLocaleString('es-CO')} resultados · se muestran hasta 60`}</p>
+              <div className="max-h-[50vh] overflow-y-auto rounded-xl border border-white/10">
+                {cupsResults.map((item) => <button key={item.code} type="button" onClick={() => selectCups(item)} className="grid w-full grid-cols-[90px_1fr_auto] items-center gap-3 border-b border-white/10 px-4 py-3 text-left hover:bg-primary/10">
+                  <span className="font-mono text-sm font-semibold text-primary">{item.code}</span>
+                  <span className="text-sm text-zinc-800 dark:text-zinc-100">{item.name}</span>
+                  {item.priority && <span className="rounded-full bg-violet-500/15 px-2 py-1 text-[10px] font-bold text-violet-700 dark:text-violet-300">FRECUENTE</span>}
+                </button>)}
+                {!cupsLoading && cupsResults.length === 0 && <p className="p-8 text-center text-sm text-zinc-400">No se encontraron códigos con ese criterio.</p>}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         <Card className="glass border-white/10 shadow-lg mb-6"><CardContent className="space-y-5 pt-6">
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">{[
             ['document_id','Documento','text'],['birth_date','Fecha de nacimiento','date'],['blood_type','Grupo sanguíneo','text'],['occupation','Ocupación','text'],
@@ -445,6 +512,36 @@ export default function HistoriaClinica() {
         {readOnly && <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">Modo de consulta: el personal administrativo puede visualizar este expediente, pero no modificarlo.</div>}
         {/* Tab Content */}
         <ClinicalReadOnlyContext.Provider value={readOnly}><div className="space-y-6">
+          {activeTab === 'anamnesis' && (
+            <div className="space-y-6">
+              <Card className="glass overflow-hidden border-white/10 shadow-lg">
+                <div className={`absolute inset-0 bg-gradient-to-br ${currentTab.gradient} pointer-events-none`} />
+                <CardHeader className="relative"><CardTitle className="flex items-center gap-3 text-lg text-white"><div className={`rounded-lg p-2 ${currentTab.bg}`}><BookOpenCheck className={`h-5 w-5 ${currentTab.text}`} /></div>Anamnesis</CardTitle><p className="ml-12 text-sm text-zinc-500">Interrogatorio clínico y antecedentes relevantes del paciente</p></CardHeader>
+                <CardContent className="relative grid gap-5 md:grid-cols-2">
+                  <div className="md:col-span-2"><TextArea label="Enfermedad actual" value={form.current_illness} onChange={handleChange('current_illness')} placeholder="Evolución, inicio, intensidad, síntomas asociados y tratamientos previos..." rows={4} /></div>
+                  <TextArea label="Antecedentes personales" value={form.personal_history} onChange={handleChange('personal_history')} placeholder="Antecedentes personales relevantes..." rows={4} />
+                  <TextArea label="Antecedentes familiares" value={form.family_history} onChange={handleChange('family_history')} placeholder="Antecedentes familiares relevantes..." rows={4} />
+                  <TextArea label="Antecedentes patológicos" value={form.pathological_history} onChange={handleChange('pathological_history')} placeholder="Enfermedades previas y condiciones crónicas..." rows={4} />
+                  <TextArea label="Antecedentes farmacológicos" value={form.pharmacological_history} onChange={handleChange('pharmacological_history')} placeholder="Medicamentos actuales o anteriores..." rows={4} />
+                  <TextArea label="Revisión por sistemas" value={form.systems_review} onChange={handleChange('systems_review')} placeholder="Hallazgos organizados por sistemas..." rows={4} />
+                  <TextArea label="Factores de riesgo" value={form.risk_factors} onChange={handleChange('risk_factors')} placeholder="Tipo de riesgo y descripción: químicos, físicos, biomecánicos, psicosociales o biológicos..." rows={4} />
+                  <div className="md:col-span-2"><TextArea label="Examen físico" value={form.physical_exam} onChange={handleChange('physical_exam')} placeholder="Hallazgos del examen físico..." rows={5} /></div>
+                </CardContent>
+              </Card>
+
+              <Card className="glass border-white/10 shadow-lg">
+                <CardHeader><CardTitle className="text-lg text-white">Información RIPS</CardTitle><p className="text-sm text-zinc-500">Código CUPS oficial y datos asociados a la consulta</p></CardHeader>
+                <CardContent className="space-y-5">
+                  <div><Label>Tipo de consulta o procedimiento CUPS</Label><div className="mt-1 flex gap-2"><Input readOnly value={form.cups_code ? `${form.cups_code} · ${form.cups_name}` : ''} placeholder="Selecciona un código CUPS..." className="border-white/10 bg-white/5" /><Button type="button" variant="outline" disabled={readOnly} onClick={() => setCupsOpen(true)} className="shrink-0 border-violet-500/30 text-violet-700 dark:text-violet-200"><Search className="mr-2 h-4 w-4" />Buscar CUPS</Button></div></div>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    {[['consultation_purpose','Finalidad de consulta',CONSULTATION_PURPOSES],['external_cause','Causa externa',EXTERNAL_CAUSES],['diagnosis_type','Tipo de diagnóstico',DIAGNOSIS_TYPES]].map(([field,label,options]) => <div key={field}><Label>{label}</Label><select disabled={readOnly} value={form[field]} onChange={handleChange(field)} className="mt-1 h-10 w-full rounded-md border border-white/10 bg-background px-3 text-sm text-foreground"><option value="">Seleccione...</option>{options.map(option => <option key={option} value={option}>{option}</option>)}</select></div>)}
+                  </div>
+                  <div className="grid gap-5 md:grid-cols-2"><TextArea label="Diagnósticos relacionados" value={form.related_diagnoses} onChange={handleChange('related_diagnoses')} placeholder="Códigos y descripciones de diagnósticos relacionados..." rows={4} /><TextArea label="Impresión diagnóstica" value={form.diagnostic_impression} onChange={handleChange('diagnostic_impression')} placeholder="Impresión clínica sustentada en la valoración..." rows={4} /></div>
+                  <p className="text-xs text-zinc-500">Catálogo CUPS 2026: 13.640 registros, Resolución 2706 de 2025. Los diagnósticos CIE-10 se integrarán desde su catálogo oficial correspondiente.</p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
           {/* Motivo de Consulta */}
           {activeTab === 'motivo' && (
             <Card className={`glass border-white/10 shadow-lg overflow-hidden`}>

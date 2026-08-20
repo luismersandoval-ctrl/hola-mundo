@@ -117,3 +117,31 @@ def test_clinical_history_persists_emergency_relationship(client, admin_headers)
     })
     assert response.status_code == 200, response.text
     assert response.json()["emergency_relationship"] == "Hermana"
+
+
+def test_cups_catalog_search_and_odontology_filter(client, admin_headers):
+    response = client.get("/catalogs/cups?search=890203&category=odontology", headers=admin_headers)
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["code"] == "890203"
+    assert "ODONTOLOGIA GENERAL" in payload["items"][0]["name"]
+    assert payload["items"][0]["priority"] is True
+
+    rejected = client.get("/catalogs/cups?category=invalid", headers=admin_headers)
+    assert rejected.status_code == 422
+
+
+def test_clinical_history_persists_anamnesis_and_cups(client, admin_headers):
+    patient = client.post("/patients/", headers=admin_headers, json={"first_name": "Anamnesis", "first_surname": "Prueba"}).json()
+    response = client.post(f"/patients/{patient['id']}/clinical-history", headers=admin_headers, json={
+        "current_illness": "Dolor de tres días de evolución.",
+        "systems_review": "Sin hallazgos cardiovasculares relevantes.",
+        "cups_code": "890203",
+        "cups_name": "CONSULTA DE PRIMERA VEZ POR ODONTOLOGIA GENERAL",
+        "diagnosis_type": "Impresión diagnóstica",
+    })
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["cups_code"] == "890203"
+    assert payload["current_illness"].startswith("Dolor")

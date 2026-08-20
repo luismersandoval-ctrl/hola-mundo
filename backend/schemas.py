@@ -142,6 +142,20 @@ class ClinicalHistoryBase(BaseModel):
     oral_hygiene: Optional[ClinicalText] = ""
     vital_signs: Optional[ClinicalText] = ""
     diagnosis: Optional[ClinicalText] = ""
+    current_illness: Optional[ClinicalText] = ""
+    personal_history: Optional[ClinicalText] = ""
+    pathological_history: Optional[ClinicalText] = ""
+    pharmacological_history: Optional[ClinicalText] = ""
+    systems_review: Optional[ClinicalText] = ""
+    physical_exam: Optional[ClinicalText] = ""
+    risk_factors: Optional[ClinicalText] = ""
+    cups_code: Optional[constr(strip_whitespace=True, max_length=16, regex=r"^[A-Za-z0-9.-]*$")] = ""
+    cups_name: Optional[ClinicalText] = ""
+    consultation_purpose: Optional[ShortText] = ""
+    external_cause: Optional[ShortText] = ""
+    diagnosis_type: Optional[ShortText] = ""
+    related_diagnoses: Optional[ClinicalText] = ""
+    diagnostic_impression: Optional[ClinicalText] = ""
 
     _valid_birth_date = validator("birth_date", allow_reuse=True)(validate_birth_date)
 

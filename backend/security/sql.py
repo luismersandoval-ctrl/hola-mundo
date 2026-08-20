@@ -17,6 +17,9 @@ ALLOWED_MIGRATION_COLUMNS = {
     "responsible_name", "responsible_phone", "responsible_relationship", "document_id", "emergency_contact", "emergency_relationship",
     "emergency_phone", "insurance", "family_history", "dental_history", "oral_hygiene", "vital_signs",
     "diagnosis", "catalog_item_id", "odontogram_reference", "odontogram_surfaces", "base_amount",
+    "current_illness", "personal_history", "pathological_history", "pharmacological_history", "systems_review",
+    "physical_exam", "risk_factors", "cups_code", "cups_name", "consultation_purpose", "external_cause",
+    "diagnosis_type", "related_diagnoses", "diagnostic_impression",
     "discount_percent", "treatment_id", "technique", "instruments", "anesthesia", "complications", "observations",
     "business_date",
 }
