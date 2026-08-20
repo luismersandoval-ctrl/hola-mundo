@@ -42,6 +42,11 @@ def test_appointment_blocks_and_overlap_rules(client, admin_headers):
     assert client.post(f"/patients/{patient['id']}/appointments", headers=admin_headers, json=invalid).status_code == 422
     overlap = {**base, "date": (start + timedelta(minutes=15)).isoformat()}
     assert client.post(f"/patients/{patient['id']}/appointments", headers=admin_headers, json=overlap).status_code == 409
+    moved = {**base, "date": (start + timedelta(days=1)).isoformat(), "reason": "Control corregido", "room_id": rooms[1]["id"]}
+    updated = client.put(f"/appointments/{created.json()['id']}", headers=admin_headers, json=moved)
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["reason"] == "Control corregido"
+    assert updated.json()["date"].startswith((start + timedelta(days=1)).date().isoformat())
 
 
 def test_fake_diagnostic_image_is_rejected(client, admin_headers):
@@ -62,3 +67,34 @@ def test_request_body_limit(client, admin_headers):
         json={"first_name": "Ana"},
     )
     assert response.status_code == 413
+
+
+def test_daily_cash_closing_freezes_totals_and_day(client, admin_headers):
+    business_date = (datetime.now() - timedelta(days=3)).date().isoformat()
+    income = client.post("/payments/", headers=admin_headers, json={
+        "type": "income", "concept": "Ingreso caja", "amount": 150000,
+        "method": "cash", "business_date": business_date,
+    })
+    expense = client.post("/payments/", headers=admin_headers, json={
+        "type": "expense", "concept": "Compra insumos", "amount": 40000,
+        "method": "cash", "business_date": business_date,
+    })
+    assert income.status_code == 200, income.text
+    assert expense.status_code == 200, expense.text
+    daily = client.get(f"/payments/?business_date={business_date}", headers=admin_headers)
+    assert daily.status_code == 200 and len(daily.json()) == 2
+
+    closing = client.post("/cash-closings", headers=admin_headers, json={"business_date": business_date, "notes": "Cierre de prueba"})
+    assert closing.status_code == 200, closing.text
+    payload = closing.json()
+    assert payload["income_total"] == 150000
+    assert payload["expense_total"] == 40000
+    assert payload["balance_total"] == 110000
+    assert payload["cash_available"] == 110000
+    assert payload["movement_count"] == 2
+
+    late = client.post("/payments/", headers=admin_headers, json={
+        "type": "income", "concept": "Movimiento tardío", "amount": 1,
+        "method": "cash", "business_date": business_date,
+    })
+    assert late.status_code == 409

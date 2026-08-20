@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Float, Date
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Float, Date, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from database import Base
@@ -316,9 +316,26 @@ class Payment(Base):
     concept = Column(String, nullable=False)
     amount = Column(Float, default=0)
     method = Column(String, default="cash")
+    business_date = Column(Date, nullable=False, index=True, default=lambda: datetime.now(timezone.utc).date())
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     patient = relationship("Patient", back_populates="payments")
     treatment = relationship("Treatment", back_populates="payments")
+
+
+class CashClosing(Base):
+    __tablename__ = "cash_closings"
+    __table_args__ = (UniqueConstraint("clinic_id", "business_date", name="uq_cash_closing_clinic_date"),)
+    id = Column(Integer, primary_key=True, index=True)
+    clinic_id = Column(Integer, ForeignKey("clinics.id"), nullable=False, index=True)
+    business_date = Column(Date, nullable=False, index=True)
+    income_total = Column(Float, nullable=False, default=0)
+    expense_total = Column(Float, nullable=False, default=0)
+    balance_total = Column(Float, nullable=False, default=0)
+    cash_available = Column(Float, nullable=False, default=0)
+    movement_count = Column(Integer, nullable=False, default=0)
+    notes = Column(Text, default="")
+    closed_by = Column(String, nullable=False, default="")
+    closed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
 class InventoryItem(Base):
     __tablename__ = "inventory_items"

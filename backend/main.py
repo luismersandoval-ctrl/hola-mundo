@@ -16,6 +16,7 @@ import smtplib
 import uuid
 from email.message import EmailMessage
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from pydantic import ValidationError
 
@@ -73,6 +74,11 @@ def migrate_existing_database():
             if "clinic_id" not in existing_columns:
                 add_column(connection, table, "clinic_id", "INTEGER")
             create_index(connection, f"ix_{table}_clinic_id", table, "clinic_id")
+        payment_columns = table_columns(connection, "payments")
+        if "business_date" not in payment_columns:
+            add_column(connection, "payments", "business_date", "DATE")
+            connection.execute(text("UPDATE payments SET business_date = DATE(created_at) WHERE business_date IS NULL"))
+        create_index(connection, "ix_payments_business_date", "payments", "business_date")
         patient_columns = table_columns(connection, "patients")
         if "first_name" not in patient_columns:
             add_column(connection, "patients", "first_name", "VARCHAR DEFAULT ''")
@@ -1247,12 +1253,14 @@ def mark_prescription_sent(prescription_id: int, db: Session = Depends(database.
     return record
 
 @app.get("/payments/", response_model=List[schemas.Payment])
-def get_payments(patient_id: int | None = None, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+def get_payments(patient_id: int | None = None, business_date: date | None = None, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     require_management(current_user)
     query = db.query(models.Payment).filter(models.Payment.clinic_id == current_user.clinic_id)
     if patient_id is not None:
         clinic_patient(db, patient_id, current_user)
         query = query.filter(models.Payment.patient_id == patient_id)
+    if business_date is not None:
+        query = query.filter(models.Payment.business_date == business_date)
     return query.order_by(models.Payment.created_at.desc()).all()
 
 @app.post("/payments/", response_model=schemas.Payment)
@@ -1261,6 +1269,11 @@ def create_payment(payment: schemas.PaymentCreate, db: Session = Depends(databas
     if payment.amount <= 0:
         raise HTTPException(status_code=422, detail="El valor del movimiento debe ser mayor que cero.")
     payload = payment.dict()
+    business_date = payment.business_date or datetime.now(ZoneInfo("America/Bogota")).date()
+    closed = db.query(models.CashClosing).filter(models.CashClosing.clinic_id == current_user.clinic_id, models.CashClosing.business_date == business_date).first()
+    if closed:
+        raise HTTPException(status_code=409, detail="La caja de este día ya fue cerrada y no admite nuevos movimientos.")
+    payload["business_date"] = business_date
     if payment.patient_id:
         clinic_patient(db, payment.patient_id, current_user)
     if payment.treatment_id:
@@ -1280,6 +1293,43 @@ def create_payment(payment: schemas.PaymentCreate, db: Session = Depends(databas
     db.commit()
     db.refresh(record)
     return record
+
+
+@app.get("/cash-closings/{business_date}", response_model=schemas.CashClosing | None)
+def get_cash_closing(business_date: date, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    require_management(current_user)
+    return db.query(models.CashClosing).filter(models.CashClosing.clinic_id == current_user.clinic_id, models.CashClosing.business_date == business_date).first()
+
+
+@app.post("/cash-closings", response_model=schemas.CashClosing)
+def close_cash_register(payload: schemas.CashClosingCreate, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    require_management(current_user)
+    today = datetime.now(ZoneInfo("America/Bogota")).date()
+    if payload.business_date > today:
+        raise HTTPException(status_code=422, detail="No es posible cerrar una caja de una fecha futura.")
+    existing = db.query(models.CashClosing).filter(models.CashClosing.clinic_id == current_user.clinic_id, models.CashClosing.business_date == payload.business_date).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="La caja de este día ya fue cerrada.")
+    movements = db.query(models.Payment).filter(models.Payment.clinic_id == current_user.clinic_id, models.Payment.business_date == payload.business_date).all()
+    income = sum((item.amount or 0) for item in movements if item.type == "income")
+    expenses = sum((item.amount or 0) for item in movements if item.type == "expense")
+    cash_income = sum((item.amount or 0) for item in movements if item.type == "income" and item.method == "cash")
+    cash_expenses = sum((item.amount or 0) for item in movements if item.type == "expense" and item.method == "cash")
+    closing = models.CashClosing(
+        clinic_id=current_user.clinic_id,
+        business_date=payload.business_date,
+        income_total=income,
+        expense_total=expenses,
+        balance_total=income - expenses,
+        cash_available=cash_income - cash_expenses,
+        movement_count=len(movements),
+        notes=payload.notes or "",
+        closed_by=current_user.display_name,
+    )
+    db.add(closing)
+    db.commit()
+    db.refresh(closing)
+    return closing
 
 @app.get("/inventory/", response_model=List[schemas.InventoryItem])
 def get_inventory(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):

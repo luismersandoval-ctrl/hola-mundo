@@ -460,6 +460,7 @@ class PaymentBase(BaseModel):
     concept: RequiredShortText
     amount: PositiveMoneyAmount
     method: Optional[constr(regex=r"^(cash|card|transfer|other)$")] = "cash"
+    business_date: Optional[date] = None
 
 class PaymentCreate(PaymentBase):
     pass
@@ -467,6 +468,24 @@ class PaymentCreate(PaymentBase):
 class Payment(PaymentBase):
     id: int
     created_at: datetime
+    class Config:
+        orm_mode = True
+
+class CashClosingCreate(BaseModel):
+    business_date: date
+    notes: Optional[ShortText] = ""
+
+class CashClosing(BaseModel):
+    id: int
+    business_date: date
+    income_total: MoneyAmount
+    expense_total: MoneyAmount
+    balance_total: float
+    cash_available: float
+    movement_count: int
+    notes: str = ""
+    closed_by: str
+    closed_at: datetime
     class Config:
         orm_mode = True
 
