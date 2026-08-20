@@ -48,6 +48,9 @@ export default function AgendaPage(){
   const [appointmentOpen,setAppointmentOpen]=useState(false)
   const [selectedAppointment,setSelectedAppointment]=useState(null)
   const [detailProfessionalId,setDetailProfessionalId]=useState('')
+  const [detailReason,setDetailReason]=useState('')
+  const [detailDate,setDetailDate]=useState('')
+  const [detailTime,setDetailTime]=useState('')
   const [detailBusy,setDetailBusy]=useState([])
   const [detailLoading,setDetailLoading]=useState(false)
   const [detailSaving,setDetailSaving]=useState(false)
@@ -95,7 +98,7 @@ export default function AgendaPage(){
   const detailProfessional=professionals.find(professional=>professional.id===Number(detailProfessionalId))
   const detailConflict=useMemo(()=>{
     if(!selectedAppointment||!detailProfessionalId)return null
-    const start=new Date(selectedAppointment.date)
+    const start=new Date(`${detailDate}T${detailTime}:00`)
     const startMinute=minutesOf(start)
     const endMinute=startMinute+(selectedAppointment.duration_minutes||30)
     return detailBusy.find(item=>{
@@ -103,21 +106,24 @@ export default function AgendaPage(){
       const busyStart=minutesOf(new Date(item.start))
       return startMinute<busyStart+item.duration_minutes&&endMinute>busyStart
     })||null
-  },[detailBusy,detailProfessionalId,selectedAppointment])
+  },[detailBusy,detailDate,detailProfessionalId,detailTime,selectedAppointment])
   useEffect(()=>{
     if(!appointmentOpen||!selectedAppointment||!detailProfessionalId){return}
     let active=true
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDetailLoading(true)
-    api.get(`/professionals/${detailProfessionalId}/availability`,{params:{day:selectedAppointment.date.slice(0,10)}})
+    api.get(`/professionals/${detailProfessionalId}/availability`,{params:{day:detailDate}})
       .then(({data})=>{if(active)setDetailBusy(data.busy||[])})
       .catch(()=>{if(active){setDetailBusy([]);setDetailError('No fue posible verificar la disponibilidad del profesional.')}})
       .finally(()=>{if(active)setDetailLoading(false)})
     return()=>{active=false}
-  },[appointmentOpen,detailProfessionalId,selectedAppointment])
+  },[appointmentOpen,detailDate,detailProfessionalId,selectedAppointment])
   const openAppointment=(appointment)=>{
     setSelectedAppointment(appointment)
     setDetailProfessionalId(appointment.professional_user_id||'')
+    setDetailReason(appointment.reason||'')
+    setDetailDate(appointment.date.slice(0,10))
+    setDetailTime(appointment.date.slice(11,16))
     setDetailBusy([])
     setDetailError('')
     setAppointmentOpen(true)
@@ -129,8 +135,8 @@ export default function AgendaPage(){
     setDetailSaving(true);setDetailError('')
     try{
       const {data}=await api.put(`/appointments/${selectedAppointment.id}`,{
-        date:selectedAppointment.date,
-        reason:selectedAppointment.reason,
+        date:`${detailDate}T${detailTime}:00`,
+        reason:detailReason.trim(),
         status:selectedAppointment.status,
         duration_minutes:selectedAppointment.duration_minutes,
         professional_user_id:detailProfessional?.id||null,
@@ -141,7 +147,7 @@ export default function AgendaPage(){
       setSelectedAppointment(data)
       setAppointmentOpen(false)
       load()
-    }catch(error){setDetailError(error.response?.data?.detail||'No fue posible actualizar el profesional de la cita.')}
+    }catch(error){setDetailError(error.response?.data?.detail||'No fue posible actualizar la cita.')}
     finally{setDetailSaving(false)}
   }
   const moveDay=(direction)=>{const next=new Date(anchor);next.setDate(next.getDate()+direction);setAnchor(next);setView('day')}
@@ -172,7 +178,31 @@ export default function AgendaPage(){
       {selectedProfessional&&<div><Label>Disponibilidad de {selectedProfessional.display_name}</Label><div className={`availability-panel mt-2 max-h-36 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-2 ${availabilityPending?'opacity-50':''}`} style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:'4px'}}>{availableSlots.map(slot=><button key={slot.time} type="button" disabled={availabilityPending||!slot.available} onClick={()=>slot.available&&setForm({...form,time:slot.time,period:Number(slot.time.slice(0,2))>=12?'PM':'AM'})} className={`availability-slot rounded p-1.5 text-[10px] font-medium ${slot.available?'bg-emerald-500/15 text-emerald-300':'bg-red-500/10 text-red-400 line-through'}`}>{slot.label}</button>)}</div><p className="mt-1 text-[10px] text-zinc-500">{availabilityPending?'Verificando disponibilidad...':'Verde disponible · rojo ocupado'}</p></div>}
       <div><Label>Motivo o tratamiento</Label><Input required value={form.reason} onChange={e=>setForm({...form,reason:e.target.value})} className="mt-1 bg-white/5 border-white/10"/></div>{error&&<p className="rounded-lg border border-red-500/20 bg-red-500/10 p-2 text-sm text-red-300">{error}</p>}<Button disabled={submitting||availabilityPending||!selectedSlotAvailable} className="w-full"><Plus className="mr-2 h-4 w-4"/>{submitting?'Guardando...':newMode?'Registrar paciente y agendar':'Confirmar cita'}</Button>
     </form></DialogContent></Dialog>
-    <Dialog open={appointmentOpen} onOpenChange={setAppointmentOpen}><DialogContent className="glass border-white/10 text-white sm:max-w-lg"><DialogHeader><DialogTitle>Detalle de la cita</DialogTitle></DialogHeader>{selectedAppointment&&<div className="space-y-4"><div className="rounded-xl border border-white/10 bg-white/[0.03] p-4"><p className="text-lg font-semibold text-white">{detailPatient?.name||`Paciente #${selectedAppointment.patient_id}`}</p><div className="mt-2 grid gap-1 text-sm text-zinc-400 sm:grid-cols-2"><p><span className="text-zinc-500">Teléfono:</span> {detailPatient?.phone?`${detailPatient.phone_country_code||''} ${detailPatient.phone}`:'Sin teléfono registrado'}</p><p><span className="text-zinc-500">Correo:</span> {detailPatient?.email||'Sin correo registrado'}</p><p><span className="text-zinc-500">Fecha:</span> {new Date(selectedAppointment.date).toLocaleDateString(locale,{dateStyle:'long'})}</p><p><span className="text-zinc-500">Hora:</span> {timeLabel(new Date(selectedAppointment.date),hourMode,locale)}</p><p><span className="text-zinc-500">Duración:</span> {selectedAppointment.duration_minutes||30} min</p><p><span className="text-zinc-500">Estado:</span> {statuses[selectedAppointment.status]||selectedAppointment.status}</p><p><span className="text-zinc-500">Consultorio:</span> {selectedAppointment.room_name||'Sin asignar'}</p></div><p className="mt-3 text-sm text-zinc-300"><span className="text-zinc-500">Motivo:</span> {selectedAppointment.reason}</p></div><div><Label>Dr., Dra. o especialista asignado</Label><select value={detailProfessionalId} onChange={event=>{setDetailProfessionalId(event.target.value);setDetailError('')}} className="mt-1 h-10 w-full rounded-md border border-white/10 bg-zinc-900 px-3 text-sm"><option value="">Sin profesional asignado</option>{professionals.map(professional=><option key={professional.id} value={professional.id}>{professional.display_name} · {professional.role==='specialist'?'Especialista':'Odontología general'}</option>)}</select>{detailProfessionalId&&<p className={`mt-2 rounded-lg border p-2 text-xs ${detailLoading?'border-white/10 text-zinc-400':detailConflict?'border-red-500/30 bg-red-500/10 text-red-300':'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}>{detailLoading?'Verificando disponibilidad...':detailConflict?`${detailProfessional?.display_name} no está disponible en este horario.`:`${detailProfessional?.display_name} está disponible en este horario.`}</p>}</div>{detailError&&<p className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">{detailError}</p>}<div className="flex flex-wrap justify-between gap-2"><Button type="button" variant="outline" onClick={()=>{setAppointmentOpen(false);navigate(`/pacientes/${selectedAppointment.patient_id}`)}} className="border-white/10">Abrir expediente</Button><div className="flex gap-2"><Button type="button" variant="outline" onClick={()=>setAppointmentOpen(false)} className="border-white/10">Cerrar</Button><Button type="button" onClick={saveAppointmentProfessional} disabled={detailSaving||detailLoading||Boolean(detailConflict)}>{detailSaving?'Guardando...':'Guardar profesional'}</Button></div></div></div>}</DialogContent></Dialog>
+    <Dialog open={appointmentOpen} onOpenChange={setAppointmentOpen}>
+      <DialogContent className="glass border-white/10 text-white sm:max-w-xl">
+        <DialogHeader><DialogTitle className="text-xl">Detalle de la cita</DialogTitle></DialogHeader>
+        {selectedAppointment&&<div className="space-y-5">
+          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+            <p className="text-xl font-semibold text-white">{detailPatient?.name||`Paciente #${selectedAppointment.patient_id}`}</p>
+            <div className="mt-3 grid gap-x-5 gap-y-2 text-base text-zinc-300 sm:grid-cols-2">
+              <p><span className="text-zinc-500">Teléfono:</span> {detailPatient?.phone?`${detailPatient.phone_country_code||''} ${detailPatient.phone}`:'Sin teléfono registrado'}</p>
+              <p><span className="text-zinc-500">Correo:</span> {detailPatient?.email||'Sin correo registrado'}</p>
+              <p><span className="text-zinc-500">Duración:</span> {selectedAppointment.duration_minutes||30} min</p>
+              <p><span className="text-zinc-500">Estado:</span> {statuses[selectedAppointment.status]||selectedAppointment.status}</p>
+              <p><span className="text-zinc-500">Consultorio:</span> {selectedAppointment.room_name||'Sin asignar'}</p>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div><Label className="text-sm">Mover al día</Label><Input required type="date" value={detailDate} onChange={event=>{setDetailDate(event.target.value);setDetailError('')}} className="mt-1 h-11 border-white/10 bg-white/5 text-base"/></div>
+            <div><Label className="text-sm">Hora de la cita</Label><Input required type="time" step="900" value={detailTime} onChange={event=>{setDetailTime(event.target.value);setDetailError('')}} className="mt-1 h-11 border-white/10 bg-white/5 text-base"/></div>
+          </div>
+          <div><Label className="text-sm">Motivo o tratamiento</Label><Input required value={detailReason} onChange={event=>setDetailReason(event.target.value)} className="mt-1 h-11 border-white/10 bg-white/5 text-base"/></div>
+          <div><Label className="text-sm">Dr., Dra. o especialista asignado</Label><select value={detailProfessionalId} onChange={event=>{setDetailProfessionalId(event.target.value);setDetailError('')}} className="mt-1 h-12 w-full rounded-md border border-white/10 bg-zinc-900 px-3 text-base font-medium"><option value="">Sin profesional asignado</option>{professionals.map(professional=><option key={professional.id} value={professional.id}>{professional.display_name} · {professional.role==='specialist'?'Especialista':'Odontología general'}</option>)}</select>{detailProfessionalId&&<p className={`mt-2 rounded-lg border p-3 text-sm ${detailLoading?'border-white/10 text-zinc-400':detailConflict?'border-red-500/30 bg-red-500/10 text-red-300':'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}>{detailLoading?'Verificando disponibilidad...':detailConflict?`${detailProfessional?.display_name} no está disponible en este horario.`:`${detailProfessional?.display_name} está disponible en este horario.`}</p>}</div>
+          {detailError&&<p className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">{detailError}</p>}
+          <div className="flex flex-wrap justify-between gap-2"><Button type="button" variant="outline" onClick={()=>{setAppointmentOpen(false);navigate(`/pacientes/${selectedAppointment.patient_id}`)}} className="border-white/10">Abrir expediente</Button><div className="flex gap-2"><Button type="button" variant="outline" onClick={()=>setAppointmentOpen(false)} className="border-white/10">Cerrar</Button><Button type="button" onClick={saveAppointmentProfessional} disabled={detailSaving||detailLoading||Boolean(detailConflict)||!detailReason.trim()||!detailDate||!detailTime}>{detailSaving?'Guardando...':'Guardar cambios'}</Button></div></div>
+        </div>}
+      </DialogContent>
+    </Dialog>
   </div></div>
 }
 
