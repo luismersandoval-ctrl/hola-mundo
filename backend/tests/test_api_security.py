@@ -106,3 +106,14 @@ def test_daily_cash_closing_freezes_totals_and_day(client, admin_headers):
         "method": "cash", "business_date": business_date,
     })
     assert late.status_code == 409
+
+
+def test_clinical_history_persists_emergency_relationship(client, admin_headers):
+    patient = client.post("/patients/", headers=admin_headers, json={"first_name": "Historia", "first_surname": "Prueba"}).json()
+    response = client.post(f"/patients/{patient['id']}/clinical-history", headers=admin_headers, json={
+        "emergency_contact": "Laura Prueba",
+        "emergency_relationship": "Hermana",
+        "emergency_phone": "3001234567",
+    })
+    assert response.status_code == 200, response.text
+    assert response.json()["emergency_relationship"] == "Hermana"

@@ -14,7 +14,7 @@ ALLOWED_MIGRATION_COLUMNS = {
     "origin_country", "ethnicity", "education_level", "landline", "residence_country", "state", "city",
     "residential_zone", "address", "neighborhood", "occupation", "occupation_code", "insurer_type",
     "insurer_name", "affiliation_type", "coverage", "companion_name", "companion_phone", "companion_email",
-    "responsible_name", "responsible_phone", "responsible_relationship", "document_id", "emergency_contact",
+    "responsible_name", "responsible_phone", "responsible_relationship", "document_id", "emergency_contact", "emergency_relationship",
     "emergency_phone", "insurance", "family_history", "dental_history", "oral_hygiene", "vital_signs",
     "diagnosis", "catalog_item_id", "odontogram_reference", "odontogram_surfaces", "base_amount",
     "discount_percent", "treatment_id", "technique", "instruments", "anesthesia", "complications", "observations",

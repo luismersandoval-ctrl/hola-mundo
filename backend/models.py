@@ -200,6 +200,7 @@ class ClinicalHistory(Base):
     address = Column(String, default="")
     occupation = Column(String, default="")
     emergency_contact = Column(String, default="")
+    emergency_relationship = Column(String, default="")
     emergency_phone = Column(String, default="")
     blood_type = Column(String, default="")
     insurance = Column(String, default="")

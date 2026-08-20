@@ -113,7 +113,7 @@ def migrate_existing_database():
         history_columns = table_columns(connection, "clinical_histories")
         history_additions = {
             "document_id": "VARCHAR DEFAULT ''", "birth_date": "VARCHAR DEFAULT ''", "address": "VARCHAR DEFAULT ''",
-            "occupation": "VARCHAR DEFAULT ''", "emergency_contact": "VARCHAR DEFAULT ''", "emergency_phone": "VARCHAR DEFAULT ''",
+            "occupation": "VARCHAR DEFAULT ''", "emergency_contact": "VARCHAR DEFAULT ''", "emergency_relationship": "VARCHAR DEFAULT ''", "emergency_phone": "VARCHAR DEFAULT ''",
             "blood_type": "VARCHAR DEFAULT ''", "insurance": "VARCHAR DEFAULT ''", "family_history": "TEXT DEFAULT ''",
             "dental_history": "TEXT DEFAULT ''", "oral_hygiene": "TEXT DEFAULT ''", "vital_signs": "TEXT DEFAULT ''", "diagnosis": "TEXT DEFAULT ''",
         }

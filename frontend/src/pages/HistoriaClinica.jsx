@@ -106,7 +106,7 @@ const emptyForm = {
   examen_intraoral: '',
   plan_tratamiento: '',
   observaciones: '',
-  document_id: '', birth_date: '', address: '', occupation: '', emergency_contact: '', emergency_phone: '',
+  document_id: '', birth_date: '', address: '', occupation: '', emergency_contact: '', emergency_relationship: '', emergency_phone: '',
   blood_type: '', insurance: '', family_history: '', dental_history: '', oral_hygiene: '', vital_signs: '', diagnosis: '',
 }
 
@@ -177,7 +177,7 @@ export default function HistoriaClinica() {
           plan_tratamiento: h.plan_tratamiento || '',
           observaciones: h.observaciones || '',
           document_id: h.document_id || '', birth_date: h.birth_date || patientRes.data.birth_date || '', address: h.address || '', occupation: h.occupation || '',
-          emergency_contact: h.emergency_contact || '', emergency_phone: h.emergency_phone || '', blood_type: h.blood_type || '', insurance: h.insurance || '',
+          emergency_contact: h.emergency_contact || '', emergency_relationship: h.emergency_relationship || '', emergency_phone: h.emergency_phone || '', blood_type: h.blood_type || '', insurance: h.insurance || '',
           family_history: h.family_history || '', dental_history: h.dental_history || '', oral_hygiene: h.oral_hygiene || '', vital_signs: h.vital_signs || '', diagnosis: h.diagnosis || '',
         })
       }
@@ -410,10 +410,10 @@ export default function HistoriaClinica() {
           </DialogContent>
         </Dialog>
 
-        <Card className="glass border-white/10 shadow-lg mb-6"><CardHeader><CardTitle className="text-white">Datos complementarios y valoración integral</CardTitle><p className="text-sm text-zinc-500">Identificación, contacto de emergencia, antecedentes odontológicos y diagnóstico.</p></CardHeader><CardContent className="space-y-5">
+        <Card className="glass border-white/10 shadow-lg mb-6"><CardContent className="space-y-5 pt-6">
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">{[
             ['document_id','Documento','text'],['birth_date','Fecha de nacimiento','date'],['blood_type','Grupo sanguíneo','text'],['occupation','Ocupación','text'],
-            ['address','Dirección','text'],['insurance','EPS / aseguradora','text'],['emergency_contact','Contacto de emergencia','text'],['emergency_phone','Teléfono de emergencia','tel'],
+            ['address','Dirección','text'],['insurance','EPS / aseguradora','text'],['emergency_contact','Contacto de emergencia','text'],['emergency_relationship','Parentesco','text'],['emergency_phone','Teléfono de emergencia','tel'],
           ].map(([key,label,type])=><div key={key}><Label>{label}</Label><input type={type} readOnly={readOnly} value={form[key]} onChange={handleChange(key)} className="mt-1 flex h-10 w-full rounded-md border border-white/10 bg-white/[0.03] px-3 text-sm text-white read-only:opacity-70" /></div>)}</div>
           <ClinicalReadOnlyContext.Provider value={readOnly}><div className="grid md:grid-cols-2 gap-4"><TextArea label="Antecedentes familiares" value={form.family_history} onChange={handleChange('family_history')} placeholder="Diabetes, hipertensión, cardiopatías, enfermedades hereditarias..." rows={3} /><TextArea label="Antecedentes odontológicos" value={form.dental_history} onChange={handleChange('dental_history')} placeholder="Experiencias previas, tratamientos, anestesia, sangrado..." rows={3} /><TextArea label="Hábitos de higiene oral" value={form.oral_hygiene} onChange={handleChange('oral_hygiene')} placeholder="Frecuencia de cepillado, seda dental, enjuague..." rows={3} /><TextArea label="Signos vitales" value={form.vital_signs} onChange={handleChange('vital_signs')} placeholder="Presión arterial, frecuencia cardíaca, temperatura..." rows={3} /><div className="md:col-span-2"><TextArea label="Diagnóstico integral" value={form.diagnosis} onChange={handleChange('diagnosis')} placeholder="Diagnóstico clínico sustentado en examen e información del odontograma..." rows={4} /></div></div></ClinicalReadOnlyContext.Provider>
         </CardContent></Card>

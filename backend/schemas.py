@@ -133,6 +133,7 @@ class ClinicalHistoryBase(BaseModel):
     address: Optional[ShortText] = ""
     occupation: Optional[ShortText] = ""
     emergency_contact: Optional[OptionalNameText] = ""
+    emergency_relationship: Optional[ShortText] = ""
     emergency_phone: Optional[PhoneText] = ""
     blood_type: Optional[ShortText] = ""
     insurance: Optional[ShortText] = ""
