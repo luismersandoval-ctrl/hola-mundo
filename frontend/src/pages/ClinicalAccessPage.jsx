@@ -48,11 +48,13 @@ export default function ClinicalAccessPage({ mode }) {
   }, [navigate])
 
   const normalizedSearch = search.trim().toLowerCase()
-  const filteredPatients = patients.filter((patient) =>
-    [patient.name, patient.phone, patient.email]
-      .filter(Boolean)
-      .some((value) => value.toLowerCase().includes(normalizedSearch)),
-  )
+  const filteredPatients = patients
+    .filter((patient) =>
+      [patient.name, patient.phone, patient.email]
+        .filter(Boolean)
+        .some((value) => value.toLowerCase().includes(normalizedSearch)),
+    )
+    .sort((first, second) => (first.name || '').localeCompare(second.name || '', 'es', { sensitivity: 'base' }))
 
   const openPatient = (patientId) => {
     const destination = isHistory ? 'historia-clinica' : isPeriodontogram ? 'periodontograma' : 'odontograma'

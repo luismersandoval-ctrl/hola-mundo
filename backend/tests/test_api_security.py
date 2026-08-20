@@ -16,6 +16,14 @@ def test_security_headers_and_pagination_limits(client, admin_headers):
     assert client.get("/patients/?skip=-1", headers=admin_headers).status_code == 422
 
 
+def test_patient_list_is_alphabetical(client, admin_headers):
+    for first_name in ("Zulema", "Alberto"):
+        response = client.post("/patients/", headers=admin_headers, json={"first_name": first_name})
+        assert response.status_code == 200, response.text
+    names = [patient["name"] for patient in client.get("/patients/", headers=admin_headers).json()]
+    assert names == sorted(names, key=str.casefold)
+
+
 def test_patient_crud_keeps_sql_payload_literal_and_rejects_mass_assignment(client, admin_headers):
     malicious = "O'Connor OR 1=1 --"
     response = client.post("/patients/", headers=admin_headers, json={"first_name": "María", "first_surname": malicious})

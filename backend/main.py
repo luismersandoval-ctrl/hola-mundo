@@ -641,7 +641,7 @@ def read_patients(skip: int = Query(0, ge=0, le=100_000), limit: int = Query(100
     query = db.query(models.Patient).filter(models.Patient.clinic_id == current_user.clinic_id)
     if current_user.role in {"dentist", "specialist"}:
         query = query.filter(models.Patient.assigned_user_id == current_user.id)
-    return query.offset(skip).limit(limit).all()
+    return query.order_by(func.lower(models.Patient.name), models.Patient.id).offset(skip).limit(limit).all()
 
 @app.post("/patients/", response_model=schemas.Patient)
 def create_patient(patient: schemas.PatientCreate, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
