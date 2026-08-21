@@ -255,6 +255,7 @@ class PatientConsent(Base):
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False, index=True)
     treatment_id = Column(Integer, ForeignKey("treatments.id"), nullable=True, index=True)
+    template_id = Column(Integer, ForeignKey("consent_templates.id"), nullable=True, index=True)
     title = Column(String, nullable=False)
     content = Column(Text, nullable=False)
     signer_name = Column(String, nullable=False)
@@ -263,6 +264,19 @@ class PatientConsent(Base):
     signed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     created_by = Column(String, default="")
     patient = relationship("Patient", back_populates="consents")
+
+class ConsentTemplate(Base):
+    __tablename__ = "consent_templates"
+    id = Column(Integer, primary_key=True, index=True)
+    clinic_id = Column(Integer, ForeignKey("clinics.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    content = Column(Text, default="")
+    original_filename = Column(String, nullable=False)
+    stored_filename = Column(String, nullable=False, unique=True)
+    content_type = Column(String, nullable=False)
+    size_bytes = Column(Integer, default=0)
+    created_by = Column(String, default="")
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
 class Treatment(Base):
     __tablename__ = "treatments"

@@ -8,6 +8,7 @@ from datetime import date, timedelta, datetime
 from typing import List
 import os
 import csv
+import io
 import json
 import hashlib
 import hmac
@@ -16,6 +17,8 @@ import secrets
 import smtplib
 import uuid
 import unicodedata
+import zipfile
+import xml.etree.ElementTree as ET
 from functools import lru_cache
 from email.message import EmailMessage
 from pathlib import Path
@@ -27,7 +30,10 @@ DIAGNOSTIC_UPLOAD_ROOT = Path(os.environ.get("DIAGNOSTIC_UPLOAD_ROOT", Path(__fi
 DIAGNOSTIC_UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 ALLOWED_DIAGNOSTIC_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf", "application/dicom", "application/octet-stream"}
 MAX_DIAGNOSTIC_FILE_SIZE = 25 * 1024 * 1024
+MAX_CONSENT_TEMPLATE_SIZE = 5 * 1024 * 1024
 CUPS_CATALOG_PATH = Path(__file__).resolve().parent / "data" / "cups_2026.csv"
+CONSENT_TEMPLATE_ROOT = Path(os.environ.get("CONSENT_TEMPLATE_ROOT", Path(__file__).resolve().parent / "uploads" / "consent-templates")).resolve()
+CONSENT_TEMPLATE_ROOT.mkdir(parents=True, exist_ok=True)
 
 
 def normalize_catalog_search(value: str) -> str:
@@ -44,6 +50,39 @@ def load_cups_catalog():
         row["odontology"] = row["odontology"] == "1"
         row["priority"] = row["priority"] == "1"
     return rows
+
+
+def extract_consent_template(filename: str, contents: bytes):
+    extension = Path(filename).suffix.lower()
+    if extension == ".txt":
+        try:
+            return contents.decode("utf-8-sig").strip()
+        except UnicodeDecodeError as exc:
+            raise HTTPException(status_code=422, detail="El archivo TXT debe estar codificado en UTF-8.") from exc
+    if extension == ".docx":
+        if not contents.startswith(b"PK"):
+            raise HTTPException(status_code=422, detail="El archivo DOCX no tiene una estructura válida.")
+        try:
+            with zipfile.ZipFile(io.BytesIO(contents)) as document:
+                entries = document.infolist()
+                if len(entries) > 500 or sum(item.file_size for item in entries) > 25 * 1024 * 1024:
+                    raise HTTPException(status_code=413, detail="El documento comprimido supera el tamaño permitido.")
+                xml_content = document.read("word/document.xml")
+            root = ET.fromstring(xml_content)
+        except (zipfile.BadZipFile, KeyError, ET.ParseError) as exc:
+            raise HTTPException(status_code=422, detail="No fue posible leer el contenido del archivo DOCX.") from exc
+        namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+        paragraphs = []
+        for paragraph in root.findall(".//w:p", namespace):
+            text_value = "".join(node.text or "" for node in paragraph.findall(".//w:t", namespace)).strip()
+            if text_value:
+                paragraphs.append(text_value)
+        return "\n\n".join(paragraphs).strip()
+    if extension == ".pdf":
+        if not contents.startswith(b"%PDF-"):
+            raise HTTPException(status_code=422, detail="El archivo PDF no tiene una firma válida.")
+        return ""
+    raise HTTPException(status_code=422, detail="Adjunta una plantilla DOCX, TXT o PDF.")
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -145,6 +184,9 @@ def migrate_existing_database():
         for column, definition in history_additions.items():
             if column not in history_columns:
                 add_column(connection, "clinical_histories", column, definition)
+        consent_columns = table_columns(connection, "patient_consents")
+        if "template_id" not in consent_columns:
+            add_column(connection, "patient_consents", "template_id", "INTEGER")
         treatment_columns = table_columns(connection, "treatments")
         if "catalog_item_id" not in treatment_columns:
             add_column(connection, "treatments", "catalog_item_id", "INTEGER")
@@ -900,6 +942,54 @@ def get_patient_consents(patient_id: int, db: Session = Depends(database.get_db)
     clinic_patient(db, patient_id, current_user)
     return db.query(models.PatientConsent).filter(models.PatientConsent.patient_id == patient_id).order_by(models.PatientConsent.signed_at.desc()).all()
 
+@app.get("/consent-templates", response_model=List[schemas.ConsentTemplate])
+def list_consent_templates(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    return db.query(models.ConsentTemplate).filter(models.ConsentTemplate.clinic_id == current_user.clinic_id).order_by(models.ConsentTemplate.created_at.desc()).all()
+
+@app.post("/consent-templates", response_model=schemas.ConsentTemplate)
+async def upload_consent_template(
+    file: UploadFile = File(...),
+    name: str = Form(""),
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    require_clinical_write(current_user)
+    contents = await file.read(MAX_CONSENT_TEMPLATE_SIZE + 1)
+    if not contents or len(contents) > MAX_CONSENT_TEMPLATE_SIZE:
+        raise HTTPException(status_code=413, detail="La plantilla debe pesar menos de 5 MB.")
+    original_filename = Path(file.filename or "plantilla").name
+    if not re.fullmatch(r"[\w .()\-áéíóúÁÉÍÓÚñÑ]{1,180}", original_filename):
+        raise HTTPException(status_code=422, detail="El nombre del archivo contiene caracteres no permitidos.")
+    extracted_content = extract_consent_template(original_filename, contents)
+    template_name = " ".join((name or Path(original_filename).stem).strip().split())
+    if not 3 <= len(template_name) <= 160:
+        raise HTTPException(status_code=422, detail="El nombre de la plantilla debe tener entre 3 y 160 caracteres.")
+    extension = Path(original_filename).suffix.lower()
+    safe_content_type = {".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", ".txt": "text/plain", ".pdf": "application/pdf"}[extension]
+    stored_filename = f"{uuid.uuid4().hex}{extension}"
+    destination = (CONSENT_TEMPLATE_ROOT / stored_filename).resolve()
+    if destination.parent != CONSENT_TEMPLATE_ROOT:
+        raise HTTPException(status_code=422, detail="La ruta del archivo no es válida.")
+    destination.write_bytes(contents)
+    record = models.ConsentTemplate(
+        clinic_id=current_user.clinic_id, name=template_name, content=extracted_content,
+        original_filename=original_filename, stored_filename=stored_filename,
+        content_type=safe_content_type, size_bytes=len(contents),
+        created_by=current_user.display_name,
+    )
+    db.add(record); db.commit(); db.refresh(record)
+    return record
+
+@app.get("/consent-templates/{template_id}/file")
+def download_consent_template(template_id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    template = db.query(models.ConsentTemplate).filter(models.ConsentTemplate.id == template_id, models.ConsentTemplate.clinic_id == current_user.clinic_id).first()
+    if not template:
+        raise HTTPException(status_code=404, detail="Plantilla no encontrada.")
+    source = (CONSENT_TEMPLATE_ROOT / template.stored_filename).resolve()
+    if source.parent != CONSENT_TEMPLATE_ROOT or not source.is_file():
+        raise HTTPException(status_code=404, detail="El archivo original no está disponible.")
+    return FileResponse(source, media_type=template.content_type, filename=template.original_filename)
+
 @app.post("/patients/{patient_id}/consents", response_model=schemas.PatientConsent)
 def create_patient_consent(patient_id: int, consent: schemas.PatientConsentCreate, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     patient = clinic_patient(db, patient_id, current_user)
@@ -914,6 +1004,10 @@ def create_patient_consent(patient_id: int, consent: schemas.PatientConsentCreat
         linked = db.query(models.Treatment).filter(models.Treatment.id == consent.treatment_id, models.Treatment.patient_id == patient_id).first()
         if not linked:
             raise HTTPException(status_code=422, detail="El tratamiento seleccionado no pertenece al paciente.")
+    if consent.template_id:
+        template = db.query(models.ConsentTemplate).filter(models.ConsentTemplate.id == consent.template_id, models.ConsentTemplate.clinic_id == current_user.clinic_id).first()
+        if not template:
+            raise HTTPException(status_code=422, detail="La plantilla seleccionada no pertenece a la clínica.")
     record = models.PatientConsent(**consent.dict(), patient_id=patient_id, created_by=current_user.display_name)
     db.add(record); db.commit(); db.refresh(record)
     return record

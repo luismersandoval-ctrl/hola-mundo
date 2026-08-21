@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom'
-import { AlertTriangle, ArrowLeft, Bot, Calendar, CheckCircle2, ClipboardList, Eraser, FileSignature, FileText, Loader2, Mail, Pencil, Pill, Plus, Printer, Save, Send, Stethoscope, Trash2, UserRound, Wallet, Waves } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Bot, Calendar, CheckCircle2, ClipboardList, Download, Eraser, FileSignature, FileText, Loader2, Mail, Pencil, Pill, Plus, Printer, Save, Send, Stethoscope, Trash2, Upload, UserRound, Wallet, Waves } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ClinicalAssistant } from '@/components/ClinicalAssistant'
+import { apiErrorMessage } from '@/lib/validation'
 
 const tabs = [
   ['summary', 'Resumen', UserRound],
@@ -48,6 +49,7 @@ export default function PatientWorkspace() {
   const [prescriptions, setPrescriptions] = useState([])
   const [payments, setPayments] = useState([])
   const [consents, setConsents] = useState([])
+  const [consentTemplates, setConsentTemplates] = useState([])
   const [readiness, setReadiness] = useState({complete:false,missing_fields:[]})
   const [catalog, setCatalog] = useState([])
   const [odontogramFindings, setOdontogramFindings] = useState('')
@@ -62,12 +64,13 @@ export default function PatientWorkspace() {
   const [editPatient, setEditPatient] = useState({ name: '', phone: '', email: '', gender: 'unspecified' })
   const [editPatientError, setEditPatientError] = useState('')
   const [savingPatient, setSavingPatient] = useState(false)
-  const [consent, setConsent] = useState({treatment_id:'',title:'Consentimiento informado para tratamiento odontológico',content:'Declaro que he recibido información clara sobre el diagnóstico, el tratamiento propuesto, sus beneficios, riesgos, alternativas y posibles complicaciones. He podido realizar preguntas y autorizo voluntariamente la realización del procedimiento descrito.',signer_name:'',signer_document:'',signature_data:''})
+  const [consent, setConsent] = useState({template_id:'',treatment_id:'',title:'Consentimiento informado para tratamiento odontológico',content:'Declaro que he recibido información clara sobre el diagnóstico, el tratamiento propuesto, sus beneficios, riesgos, alternativas y posibles complicaciones. He podido realizar preguntas y autorizo voluntariamente la realización del procedimiento descrito.',signer_name:'',signer_document:'',signature_data:''})
   const [savingConsent, setSavingConsent] = useState(false)
+  const [uploadingTemplate, setUploadingTemplate] = useState(false)
 
   const loadData = useCallback(async () => {
     try {
-      const [patientRes, historiesRes, evolutionsRes, treatmentsRes, prescriptionsRes, paymentsRes, catalogRes, odontogramRes, readinessRes, consentsRes] = await Promise.all([
+      const [patientRes, historiesRes, evolutionsRes, treatmentsRes, prescriptionsRes, paymentsRes, catalogRes, odontogramRes, readinessRes, consentsRes, templatesRes] = await Promise.all([
         api.get(`/patients/${id}`),
         api.get(`/patients/${id}/clinical-history`),
         api.get(`/patients/${id}/evolutions`),
@@ -78,6 +81,7 @@ export default function PatientWorkspace() {
         api.get(`/patients/${id}/odontograma`).catch((error) => error.response?.status === 404 ? { data: null } : Promise.reject(error)),
         api.get(`/patients/${id}/clinical-readiness`),
         api.get(`/patients/${id}/consents`),
+        api.get('/consent-templates'),
       ])
       setPatient(patientRes.data)
       setHistories(historiesRes.data)
@@ -88,6 +92,7 @@ export default function PatientWorkspace() {
       setCatalog(catalogRes.data)
       setReadiness(readinessRes.data)
       setConsents(consentsRes.data)
+      setConsentTemplates(templatesRes.data)
       if (odontogramRes.data?.data) {
         const data = JSON.parse(odontogramRes.data.data)
         const findings = Object.entries(data).flatMap(([tooth, detail]) => {
@@ -130,10 +135,47 @@ export default function PatientWorkspace() {
     event.preventDefault();setSavingConsent(true);setError('')
     try {
       await api.post(`/patients/${id}/consents`, {...consent,treatment_id:consent.treatment_id?Number(consent.treatment_id):null})
-      setConsent({...consent,treatment_id:'',signer_name:'',signer_document:'',signature_data:''})
+      setConsent({...consent,template_id:'',treatment_id:'',signer_name:'',signer_document:'',signature_data:''})
       await loadData()
-    } catch (requestError) { setError(requestError.response?.data?.detail || 'No fue posible guardar el consentimiento informado.') }
+    } catch (requestError) { setError(apiErrorMessage(requestError, 'No fue posible guardar el consentimiento informado.')) }
     finally { setSavingConsent(false) }
+  }
+
+  const fillConsentTemplate = (template, treatmentId = consent.treatment_id) => {
+    const history = histories[0] || {}
+    const linkedTreatment = treatments.find(item => item.id === Number(treatmentId))
+    const values = {
+      paciente: patient?.name || '', documento: [patient?.document_type, patient?.document_number].filter(Boolean).join(' '),
+      fecha: new Date().toLocaleDateString('es-CO'), profesional: currentUser?.display_name || currentUser?.full_name || '',
+      tratamiento: linkedTreatment?.name || '', telefono: patient?.phone ? `${patient.phone_country_code || ''} ${patient.phone}`.trim() : '',
+      domicilio: patient?.address || history.address || '', alergias: history.alergias || '', habitos: history.habitos || '',
+      motivo_consulta: history.motivo_consulta || '', diagnostico: history.diagnosis || '',
+    }
+    const content = (template.content || '').replace(/\{([a-z_]+)\}/gi, (match, key) => Object.hasOwn(values, key.toLowerCase()) ? values[key.toLowerCase()] : match)
+    setConsent(current => ({...current,template_id:String(template.id),title:template.name,content:content || current.content,treatment_id:treatmentId}))
+    if (!template.content) setError('El PDF quedó adjunto como original. Escribe o pega el texto editable antes de solicitar la firma.')
+    else setError('')
+  }
+
+  const uploadConsentTemplate = async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setUploadingTemplate(true);setError('')
+    try {
+      const payload = new FormData();payload.append('file',file);payload.append('name',file.name.replace(/\.[^.]+$/,''))
+      const {data} = await api.post('/consent-templates',payload)
+      setConsentTemplates(current => [data,...current])
+      fillConsentTemplate(data)
+    } catch (requestError) { setError(apiErrorMessage(requestError, 'No fue posible cargar la plantilla.')) }
+    finally { setUploadingTemplate(false) }
+  }
+
+  const downloadConsentTemplate = async (template) => {
+    try {
+      const {data} = await api.get(`/consent-templates/${template.id}/file`,{responseType:'blob'})
+      const url=URL.createObjectURL(data);const link=document.createElement('a');link.href=url;link.download=template.original_filename;link.click();URL.revokeObjectURL(url)
+    } catch (requestError) { setError(apiErrorMessage(requestError, 'No fue posible descargar el archivo original.')) }
   }
 
   const updateTreatmentStatus = async (item, status) => {
@@ -247,6 +289,7 @@ export default function PatientWorkspace() {
 
         {activeTab === 'consents' && <div className="grid gap-6 lg:grid-cols-[430px_1fr]">
           <Card className="glass border-white/10"><CardHeader><CardTitle className="text-white">Nuevo consentimiento informado</CardTitle><p className="text-sm text-zinc-500">Debe firmarlo el paciente o su representante antes de iniciar el tratamiento.</p></CardHeader><CardContent><form onSubmit={createConsent} className="space-y-3">
+            <div className="rounded-xl border border-dashed border-primary/30 bg-primary/5 p-3"><Label>Plantilla editable</Label><div className="mt-2 flex gap-2"><select value={consent.template_id} onChange={event=>{const template=consentTemplates.find(item=>item.id===Number(event.target.value));if(template)fillConsentTemplate(template);else setConsent({...consent,template_id:''})}} className="h-10 min-w-0 flex-1 rounded-md border border-white/10 bg-white/5 px-3 text-sm text-foreground"><option value="">Sin plantilla</option>{consentTemplates.map(template=><option key={template.id} value={template.id}>{template.name}</option>)}</select><label className="inline-flex h-10 cursor-pointer items-center rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90"><input type="file" accept=".docx,.txt,.pdf" onChange={uploadConsentTemplate} className="sr-only" disabled={uploadingTemplate}/>{uploadingTemplate?<Loader2 className="mr-2 h-4 w-4 animate-spin"/>:<Upload className="mr-2 h-4 w-4"/>}Adjuntar</label></div><p className="mt-2 text-xs text-zinc-500">DOCX y TXT se convierten a texto editable. El original queda guardado. Variables disponibles: {'{paciente}'}, {'{documento}'}, {'{fecha}'}, {'{profesional}'}, {'{tratamiento}'}, {'{telefono}'}, {'{domicilio}'}, {'{alergias}'}, {'{habitos}'}.</p></div>
             <div><Label>Tratamiento relacionado</Label><select required value={consent.treatment_id} onChange={event=>setConsent({...consent,treatment_id:event.target.value})} disabled={!readiness.complete} className="mt-1 h-10 w-full rounded-md border border-white/10 bg-zinc-900 px-3 text-sm"><option value="">Seleccionar tratamiento</option>{treatments.map(item=><option key={item.id} value={item.id}>{item.name}{item.tooth?` · Pieza ${item.tooth}`:''}</option>)}</select></div>
             <div><Label>Título</Label><Input required value={consent.title} onChange={event=>setConsent({...consent,title:event.target.value})} className="mt-1 bg-white/5 border-white/10"/></div>
             <div><Label>Información, riesgos y autorización</Label><textarea required minLength={30} rows={7} value={consent.content} onChange={event=>setConsent({...consent,content:event.target.value})} className="mt-1 w-full rounded-md border border-white/10 bg-white/5 p-3 text-sm"/></div>
@@ -254,7 +297,7 @@ export default function PatientWorkspace() {
             <div><Label>Firma manuscrita</Label><div className="mt-1"><SignaturePad key={consents.length} onChange={signature_data=>setConsent(current=>({...current,signature_data}))}/></div></div>
             <Button disabled={savingConsent||!readiness.complete||!consent.signature_data} className="w-full"><FileSignature className="mr-2 h-4 w-4"/>{savingConsent?'Guardando firma...':'Firmar y guardar consentimiento'}</Button>
           </form></CardContent></Card>
-          <div className="space-y-3">{consents.length===0?<Empty text="No hay consentimientos firmados."/>:consents.map(item=>{const linked=treatments.find(t=>t.id===item.treatment_id);return <Card key={item.id} className="glass border-white/10"><CardContent className="p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold text-white">{item.title}</p><p className="mt-1 text-xs text-emerald-300">Firmado por {item.signer_name}{item.signer_document?` · ${item.signer_document}`:''}</p></div><span className="text-xs text-zinc-500">{new Date(item.signed_at).toLocaleString()}</span></div><p className="mt-3 text-sm text-zinc-400">{item.content}</p>{linked&&<p className="mt-3 rounded-lg bg-primary/10 px-3 py-2 text-xs text-primary">Tratamiento: {linked.name}{linked.tooth?` · Pieza ${linked.tooth}`:''}</p>}<img src={item.signature_data} alt={`Firma de ${item.signer_name}`} className="mt-4 h-24 max-w-full rounded-lg bg-white object-contain p-2"/></CardContent></Card>})}</div>
+          <div className="space-y-3">{consents.length===0?<Empty text="No hay consentimientos firmados."/>:consents.map(item=>{const linked=treatments.find(t=>t.id===item.treatment_id);const template=consentTemplates.find(entry=>entry.id===item.template_id);return <Card key={item.id} className="glass border-white/10"><CardContent className="p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold text-white">{item.title}</p><p className="mt-1 text-xs text-emerald-300">Firmado por {item.signer_name}{item.signer_document?` · ${item.signer_document}`:''}</p></div><span className="text-xs text-zinc-500">{new Date(item.signed_at).toLocaleString()}</span></div><p className="mt-3 whitespace-pre-wrap text-sm text-zinc-400">{item.content}</p>{linked&&<p className="mt-3 rounded-lg bg-primary/10 px-3 py-2 text-xs text-primary">Tratamiento: {linked.name}{linked.tooth?` · Pieza ${linked.tooth}`:''}</p>}{template&&<Button type="button" variant="outline" size="sm" onClick={()=>downloadConsentTemplate(template)} className="mt-3 border-white/10"><Download className="mr-2 h-4 w-4"/>Descargar original · {template.original_filename}</Button>}<img src={item.signature_data} alt={`Firma de ${item.signer_name}`} className="mt-4 h-24 max-w-full rounded-lg bg-white object-contain p-2"/></CardContent></Card>})}</div>
         </div>}
 
         {activeTab === 'evolutions' && readiness.complete && <div className={`grid gap-6 ${canRecordEvolution ? 'lg:grid-cols-[420px_1fr]' : ''}`}>

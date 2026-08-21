@@ -348,6 +348,7 @@ class ClinicalEvolution(ClinicalEvolutionBase):
         orm_mode = True
 
 class PatientConsentCreate(BaseModel):
+    template_id: Optional[PositiveId] = None
     treatment_id: Optional[PositiveId] = None
     title: NameText
     content: ClinicalText
@@ -361,6 +362,7 @@ class PatientConsent(BaseModel):
     id: int
     patient_id: int
     treatment_id: Optional[int] = None
+    template_id: Optional[int] = None
     title: str
     content: str
     signer_name: str
@@ -368,6 +370,18 @@ class PatientConsent(BaseModel):
     signature_data: str
     signed_at: datetime
     created_by: str = ""
+    class Config:
+        orm_mode = True
+
+class ConsentTemplate(BaseModel):
+    id: int
+    name: str
+    content: str = ""
+    original_filename: str
+    content_type: str
+    size_bytes: int = 0
+    created_by: str = ""
+    created_at: datetime
     class Config:
         orm_mode = True
 

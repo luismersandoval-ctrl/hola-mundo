@@ -3,7 +3,7 @@ from sqlalchemy import text
 
 ALLOWED_MIGRATION_TABLES = {
     "appointments", "users", "clinics", "registration_otps", "patients", "payments",
-    "inventory_items", "clinical_histories", "treatments", "clinical_evolutions", "cash_closings",
+    "inventory_items", "clinical_histories", "treatments", "clinical_evolutions", "cash_closings", "patient_consents",
 }
 
 ALLOWED_MIGRATION_COLUMNS = {
@@ -21,7 +21,7 @@ ALLOWED_MIGRATION_COLUMNS = {
     "physical_exam", "risk_factors", "cups_code", "cups_name", "consultation_purpose", "external_cause",
     "diagnosis_type", "related_diagnoses", "diagnostic_impression",
     "discount_percent", "treatment_id", "technique", "instruments", "anesthesia", "complications", "observations",
-    "business_date",
+    "business_date", "template_id",
 }
 
 ALLOWED_COLUMN_DEFINITIONS = {

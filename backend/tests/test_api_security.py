@@ -139,6 +139,31 @@ def test_document_identity_is_saved_and_prevents_duplicates(client, admin_header
     assert patient.json()["document_number"] == "AB123456"
 
 
+def test_consent_template_upload_extracts_text_and_keeps_original(client, admin_headers):
+    content = "CONSENTIMIENTO INFORMADO\nPaciente: {paciente}\nTratamiento: {tratamiento}\nRiesgos y alternativas explicados."
+    response = client.post(
+        "/consent-templates", headers=admin_headers,
+        data={"name": "Consentimiento de prueba"},
+        files={"file": ("consentimiento.txt", content.encode(), "text/plain")},
+    )
+    assert response.status_code == 200, response.text
+    template = response.json()
+    assert template["content"] == content
+    assert template["original_filename"] == "consentimiento.txt"
+
+    listing = client.get("/consent-templates", headers=admin_headers)
+    assert any(item["id"] == template["id"] for item in listing.json())
+    original = client.get(f"/consent-templates/{template['id']}/file", headers=admin_headers)
+    assert original.status_code == 200
+    assert original.content == content.encode()
+
+    invalid = client.post(
+        "/consent-templates", headers=admin_headers,
+        files={"file": ("falso.pdf", b"not a pdf", "application/pdf")},
+    )
+    assert invalid.status_code == 422
+
+
 def test_cups_catalog_search_and_odontology_filter(client, admin_headers):
     response = client.get("/catalogs/cups?search=890203&category=odontology", headers=admin_headers)
     assert response.status_code == 200, response.text
