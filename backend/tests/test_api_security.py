@@ -119,6 +119,26 @@ def test_clinical_history_persists_emergency_relationship(client, admin_headers)
     assert response.json()["emergency_relationship"] == "Hermana"
 
 
+def test_document_identity_is_saved_and_prevents_duplicates(client, admin_headers):
+    first = client.post("/patients/", headers=admin_headers, json={
+        "first_name": "Documento", "first_surname": "Uno", "document_type": "CC", "document_number": "123456789",
+    })
+    assert first.status_code == 200, first.text
+    duplicate = client.post("/patients/", headers=admin_headers, json={
+        "first_name": "Documento", "first_surname": "Dos", "document_type": "CC", "document_number": "123456789",
+    })
+    assert duplicate.status_code == 409
+
+    history = client.post(f"/patients/{first.json()['id']}/clinical-history", headers=admin_headers, json={
+        "document_type": "PA", "document_id": "AB123456",
+    })
+    assert history.status_code == 200, history.text
+    assert history.json()["document_type"] == "PA"
+    patient = client.get(f"/patients/{first.json()['id']}", headers=admin_headers)
+    assert patient.json()["document_type"] == "PA"
+    assert patient.json()["document_number"] == "AB123456"
+
+
 def test_cups_catalog_search_and_odontology_filter(client, admin_headers):
     response = client.get("/catalogs/cups?search=890203&category=odontology", headers=admin_headers)
     assert response.status_code == 200, response.text

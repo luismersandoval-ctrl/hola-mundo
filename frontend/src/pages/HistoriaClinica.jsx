@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect, useCallback, useContext, useMemo } from 'react'
+import { createContext, useState, useEffect, useCallback, useContext, useMemo, useRef } from 'react'
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import axios from 'axios'
 import { Button } from '@/components/ui/button'
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { PhoneInput } from '@/components/PhoneInput'
 import { PatientImaging } from '@/components/PatientImaging'
+import { DOCUMENT_TYPES } from '@/lib/patientOptions'
 import {
   ArrowLeft,
   Save,
@@ -30,6 +31,8 @@ import {
   BookOpenCheck,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react'
 
 const API = '/api'
@@ -114,7 +117,7 @@ const emptyForm = {
   examen_intraoral: '',
   plan_tratamiento: '',
   observaciones: '',
-  document_id: '', birth_date: '', address: '', occupation: '', emergency_contact: '', emergency_relationship: '', emergency_phone: '',
+  document_type: '', document_id: '', birth_date: '', address: '', occupation: '', emergency_contact: '', emergency_relationship: '', emergency_phone: '',
   blood_type: '', insurance: '', family_history: '', dental_history: '', oral_hygiene: '', vital_signs: '', diagnosis: '',
   current_illness: '', personal_history: '', pathological_history: '', pharmacological_history: '', systems_review: '',
   physical_exam: '', risk_factors: '', cups_code: '', cups_name: '', consultation_purpose: '', external_cause: '',
@@ -169,6 +172,7 @@ export default function HistoriaClinica() {
   const [cupsTotalPages, setCupsTotalPages] = useState(1)
   const [cupsLoading, setCupsLoading] = useState(false)
   const [cupsError, setCupsError] = useState('')
+  const cupsListRef = useRef(null)
 
   const token = localStorage.getItem('token')
   const config = useMemo(() => ({ headers: { Authorization: `Bearer ${token}` } }), [token])
@@ -181,7 +185,7 @@ export default function HistoriaClinica() {
         axios.get(`${API}/patients/${patientId}/clinical-history`, config),
       ])
       setPatient(patientRes.data)
-      setForm((current) => ({...current, birth_date: patientRes.data.birth_date || current.birth_date}))
+      setForm((current) => ({...current, document_type: patientRes.data.document_type || current.document_type, document_id: patientRes.data.document_number || current.document_id, birth_date: patientRes.data.birth_date || current.birth_date}))
       if (historyRes.data.length > 0) {
         const h = historyRes.data[0]
         setHistoryId(h.id)
@@ -196,7 +200,7 @@ export default function HistoriaClinica() {
           examen_intraoral: h.examen_intraoral || '',
           plan_tratamiento: h.plan_tratamiento || '',
           observaciones: h.observaciones || '',
-          document_id: h.document_id || '', birth_date: h.birth_date || patientRes.data.birth_date || '', address: h.address || '', occupation: h.occupation || '',
+          document_type: h.document_type || patientRes.data.document_type || '', document_id: h.document_id || patientRes.data.document_number || '', birth_date: h.birth_date || patientRes.data.birth_date || '', address: h.address || '', occupation: h.occupation || '',
           emergency_contact: h.emergency_contact || '', emergency_relationship: h.emergency_relationship || '', emergency_phone: h.emergency_phone || '', blood_type: h.blood_type || '', insurance: h.insurance || '',
           family_history: h.family_history || '', dental_history: h.dental_history || '', oral_hygiene: h.oral_hygiene || '', vital_signs: h.vital_signs || '', diagnosis: h.diagnosis || '',
           current_illness: h.current_illness || '', personal_history: h.personal_history || '', pathological_history: h.pathological_history || '', pharmacological_history: h.pharmacological_history || '',
@@ -248,6 +252,11 @@ export default function HistoriaClinica() {
     setForm((current) => ({ ...current, cups_code: item.code, cups_name: item.name }))
     setSaved(false)
     setCupsOpen(false)
+  }
+
+  const changeCupsPage = (nextPage) => {
+    setCupsPage(nextPage)
+    cupsListRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleChange = (field) => (e) => {
@@ -473,7 +482,7 @@ export default function HistoriaClinica() {
               </div>
               <p className="text-xs text-zinc-400">{cupsLoading ? 'Buscando...' : `${cupsTotal.toLocaleString('es-CO')} resultados · se muestran hasta 60`}</p>
               {cupsError && <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">{cupsError}</div>}
-              <div className="max-h-[50vh] overflow-y-auto rounded-xl border border-white/10">
+              <div ref={cupsListRef} className="max-h-[50vh] overflow-y-auto rounded-xl border border-white/10">
                 {cupsResults.map((item) => <button key={item.code} type="button" onClick={() => selectCups(item)} className="grid w-full grid-cols-[90px_1fr_auto] items-center gap-3 border-b border-white/10 px-4 py-3 text-left hover:bg-primary/10">
                   <span className="font-mono text-sm font-semibold text-primary">{item.code}</span>
                   <span className="text-sm text-zinc-800 dark:text-zinc-100">{item.name}</span>
@@ -483,15 +492,22 @@ export default function HistoriaClinica() {
               </div>
               {!cupsError && cupsTotal > 0 && <div className="flex items-center justify-between gap-3">
                 <p className="text-xs text-zinc-500">Página {cupsPage.toLocaleString('es-CO')} de {cupsTotalPages.toLocaleString('es-CO')}</p>
-                <div className="flex items-center gap-2"><Button type="button" variant="outline" size="sm" disabled={cupsLoading || cupsPage <= 1} onClick={() => setCupsPage(page => page - 1)}><ChevronLeft className="mr-1 h-4 w-4" />Anterior</Button><Button type="button" variant="outline" size="sm" disabled={cupsLoading || cupsPage >= cupsTotalPages} onClick={() => setCupsPage(page => page + 1)}>Siguiente<ChevronRight className="ml-1 h-4 w-4" /></Button></div>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" size="icon" aria-label="Ir a la primera página" title="Primera página" disabled={cupsLoading || cupsPage <= 1} onClick={() => changeCupsPage(1)}><ChevronsLeft className="h-4 w-4" /></Button>
+                  <Button type="button" variant="outline" size="sm" disabled={cupsLoading || cupsPage <= 1} onClick={() => changeCupsPage(cupsPage - 1)}><ChevronLeft className="mr-1 h-4 w-4" />Anterior</Button>
+                  <Button type="button" variant="outline" size="sm" disabled={cupsLoading || cupsPage >= cupsTotalPages} onClick={() => changeCupsPage(cupsPage + 1)}>Siguiente<ChevronRight className="ml-1 h-4 w-4" /></Button>
+                  <Button type="button" variant="outline" size="icon" aria-label="Ir a la última página" title="Última página" disabled={cupsLoading || cupsPage >= cupsTotalPages} onClick={() => changeCupsPage(cupsTotalPages)}><ChevronsRight className="h-4 w-4" /></Button>
+                </div>
               </div>}
             </div>
           </DialogContent>
         </Dialog>
 
         <Card className="glass border-white/10 shadow-lg mb-6"><CardContent className="space-y-5 pt-6">
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">{[
-            ['document_id','Documento','text'],['birth_date','Fecha de nacimiento','date'],['blood_type','Grupo sanguíneo','text'],['occupation','Ocupación','text'],
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div><Label>Tipo de documento</Label><select disabled={readOnly} value={form.document_type} onChange={handleChange('document_type')} className="mt-1 h-10 w-full rounded-md border border-white/10 bg-background px-3 text-sm text-foreground"><option value="">Seleccionar...</option>{DOCUMENT_TYPES.map(([code,label])=><option key={code} value={code}>{code} · {label}</option>)}</select></div>
+            {[
+            ['document_id','Número de documento','text'],['birth_date','Fecha de nacimiento','date'],['blood_type','Grupo sanguíneo','text'],['occupation','Ocupación','text'],
             ['address','Dirección','text'],['insurance','EPS / aseguradora','text'],['emergency_contact','Contacto de emergencia','text'],['emergency_relationship','Parentesco','text'],['emergency_phone','Teléfono de emergencia','tel'],
           ].map(([key,label,type])=><div key={key}><Label>{label}</Label><input type={type} readOnly={readOnly} value={form[key]} onChange={handleChange(key)} className="mt-1 flex h-10 w-full rounded-md border border-white/10 bg-white/[0.03] px-3 text-sm text-white read-only:opacity-70" /></div>)}</div>
           <ClinicalReadOnlyContext.Provider value={readOnly}><div className="grid md:grid-cols-2 gap-4"><TextArea label="Antecedentes familiares" value={form.family_history} onChange={handleChange('family_history')} placeholder="Diabetes, hipertensión, cardiopatías, enfermedades hereditarias..." rows={3} /><TextArea label="Antecedentes odontológicos" value={form.dental_history} onChange={handleChange('dental_history')} placeholder="Experiencias previas, tratamientos, anestesia, sangrado..." rows={3} /><TextArea label="Hábitos de higiene oral" value={form.oral_hygiene} onChange={handleChange('oral_hygiene')} placeholder="Frecuencia de cepillado, seda dental, enjuague..." rows={3} /><TextArea label="Signos vitales" value={form.vital_signs} onChange={handleChange('vital_signs')} placeholder="Presión arterial, frecuencia cardíaca, temperatura..." rows={3} /><div className="md:col-span-2"><TextArea label="Diagnóstico integral" value={form.diagnosis} onChange={handleChange('diagnosis')} placeholder="Diagnóstico clínico sustentado en examen e información del odontograma..." rows={4} /></div></div></ClinicalReadOnlyContext.Provider>

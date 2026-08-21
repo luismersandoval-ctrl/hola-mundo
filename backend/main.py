@@ -132,7 +132,7 @@ def migrate_existing_database():
         create_index(connection, "ix_patients_assigned_user_id", "patients", "assigned_user_id")
         history_columns = table_columns(connection, "clinical_histories")
         history_additions = {
-            "document_id": "VARCHAR DEFAULT ''", "birth_date": "VARCHAR DEFAULT ''", "address": "VARCHAR DEFAULT ''",
+            "document_type": "VARCHAR DEFAULT ''", "document_id": "VARCHAR DEFAULT ''", "birth_date": "VARCHAR DEFAULT ''", "address": "VARCHAR DEFAULT ''",
             "occupation": "VARCHAR DEFAULT ''", "emergency_contact": "VARCHAR DEFAULT ''", "emergency_relationship": "VARCHAR DEFAULT ''", "emergency_phone": "VARCHAR DEFAULT ''",
             "blood_type": "VARCHAR DEFAULT ''", "insurance": "VARCHAR DEFAULT ''", "family_history": "TEXT DEFAULT ''",
             "dental_history": "TEXT DEFAULT ''", "oral_hygiene": "TEXT DEFAULT ''", "vital_signs": "TEXT DEFAULT ''", "diagnosis": "TEXT DEFAULT ''",
@@ -683,11 +683,18 @@ def create_patient(patient: schemas.PatientCreate, db: Session = Depends(databas
     data["name"] = " ".join(part for part in (first_name, data.get("second_name"), first_surname, data.get("second_surname")) if part)
     data["phone"] = (data.get("phone") or "").strip() or None
     data["email"] = (data.get("email") or "").strip().lower() or None
+    data["document_type"] = (data.get("document_type") or "").strip()
+    data["document_number"] = (data.get("document_number") or "").strip()
     duplicate_filters = []
     if data["email"]:
         duplicate_filters.append(func.lower(models.Patient.email) == data["email"])
     if data["phone"]:
         duplicate_filters.append(models.Patient.phone == data["phone"])
+    if data["document_type"] and data["document_number"]:
+        duplicate_filters.append(
+            (models.Patient.document_type == data["document_type"])
+            & (models.Patient.document_number == data["document_number"])
+        )
     if duplicate_filters:
         from sqlalchemy import or_
         duplicate = db.query(models.Patient).filter(
@@ -695,7 +702,7 @@ def create_patient(patient: schemas.PatientCreate, db: Session = Depends(databas
             or_(*duplicate_filters),
         ).first()
         if duplicate:
-            raise HTTPException(status_code=409, detail=f"El paciente ya está registrado como {duplicate.name}.")
+            raise HTTPException(status_code=409, detail=f"El teléfono, correo o documento ya pertenece a {duplicate.name}.")
     if data.get("gender") not in {"", "male", "female", "other", "unspecified"}:
         raise HTTPException(status_code=422, detail="Selecciona un género válido.")
     assigned_user_id = data.pop("assigned_user_id", None)
@@ -848,6 +855,10 @@ def create_clinical_history(patient_id: int, history: schemas.ClinicalHistoryCre
     require_clinical_write(current_user)
     patient = clinic_patient(db, patient_id, current_user)
     db_history = models.ClinicalHistory(**history.dict(), patient_id=patient_id)
+    if history.document_type:
+        patient.document_type = history.document_type
+    if history.document_id:
+        patient.document_number = history.document_id
     if history.birth_date:
         patient.birth_date = history.birth_date
     db.add(db_history)
@@ -868,6 +879,10 @@ def update_clinical_history(patient_id: int, history_id: int, history: schemas.C
     update_data = history.dict(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_history, key, value)
+    if history.document_type:
+        patient.document_type = history.document_type
+    if history.document_id:
+        patient.document_number = history.document_id
     if history.birth_date:
         patient.birth_date = history.birth_date
     db.commit()
@@ -982,6 +997,13 @@ def update_patient(patient_id: int, patient: schemas.PatientCreate, db: Session 
         duplicate_filters.append(models.Patient.phone == phone)
     if email:
         duplicate_filters.append(func.lower(models.Patient.email) == email)
+    document_type = (patient.document_type or "").strip()
+    document_number = (patient.document_number or "").strip()
+    if document_type and document_number:
+        duplicate_filters.append(
+            (models.Patient.document_type == document_type)
+            & (models.Patient.document_number == document_number)
+        )
     if duplicate_filters:
         duplicate = db.query(models.Patient).filter(
             models.Patient.clinic_id == current_user.clinic_id,
@@ -989,7 +1011,7 @@ def update_patient(patient_id: int, patient: schemas.PatientCreate, db: Session 
             or_(*duplicate_filters),
         ).first()
         if duplicate:
-            raise HTTPException(status_code=409, detail=f"El teléfono o correo ya pertenece a {duplicate.name}.")
+            raise HTTPException(status_code=409, detail=f"El teléfono, correo o documento ya pertenece a {duplicate.name}.")
     db_patient.name = name
     db_patient.first_name = first_name
     db_patient.first_surname = first_surname

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PhoneInput } from '@/components/PhoneInput'
 import { INPUT_LIMITS, normalizeDocument, normalizeName } from '@/lib/validation'
+import { DOCUMENT_TYPES } from '@/lib/patientOptions'
 
 const initialForm = {
   first_name:'', second_name:'', first_surname:'', second_surname:'', document_type:'CC', document_number:'',
@@ -17,7 +18,6 @@ const initialForm = {
   companion_email:'', responsible_name:'', responsible_phone:'', responsible_relationship:'',
 }
 
-const documentTypes = [['CC','Cédula de ciudadanía'],['TI','Tarjeta de identidad'],['RC','Registro civil'],['CE','Cédula de extranjería'],['PA','Pasaporte'],['PEP','Permiso especial de permanencia'],['PPT','Permiso por protección temporal'],['AS','Adulto sin identificación'],['MS','Menor sin identificación'],['DE','Documento extranjero']]
 const genders = [['female','Femenino'],['male','Masculino'],['other','Otro'],['unspecified','Prefiere no indicar']]
 const bloodTypes = ['O+','O-','A+','A-','B+','B-','AB+','AB-']
 
@@ -50,7 +50,7 @@ export function CompletePatientDialog({ open, onOpenChange, onCreated }) {
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="glass top-3 bottom-3 max-h-none translate-y-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden border-white/10 p-0 text-white sm:max-w-5xl"><DialogHeader className="border-b border-white/10 bg-zinc-950/95 px-5 py-4 pr-12"><DialogTitle>Registro completo de paciente</DialogTitle><p className="text-sm text-zinc-400">Información administrativa y demográfica para abrir la historia clínica.</p></DialogHeader><form onSubmit={submit} className="min-h-0 space-y-4 overflow-y-auto px-5 pb-6 pt-4">
     <Section icon={UserRound} title="Identificación">
       {input('first_name','Primer nombre',true)}{input('second_name','Segundo nombre')}{input('first_surname','Primer apellido',true)}{input('second_surname','Segundo apellido')}
-      <SelectField label="Tipo de documento" required value={form.document_type} onChange={change('document_type')} options={documentTypes}/>{input('document_number','Número de documento',true)}
+      <SelectField label="Tipo de documento" required value={form.document_type} onChange={change('document_type')} options={DOCUMENT_TYPES}/>{input('document_number','Número de documento',true)}
     </Section>
     <Section icon={HeartPulse} title="Datos personales">
       {input('birth_date','Fecha de nacimiento',true,'date')}<SelectField label="Género" required value={form.gender} onChange={change('gender')} options={genders}/><SelectField label="Grupo sanguíneo" value={form.blood_type} onChange={change('blood_type')} options={bloodTypes}/>

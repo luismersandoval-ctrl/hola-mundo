@@ -196,6 +196,7 @@ class ClinicalHistory(Base):
     plan_tratamiento = Column(Text, default="")
     observaciones = Column(Text, default="")
     document_id = Column(String, default="")
+    document_type = Column(String, default="")
     birth_date = Column(String, default="")
     address = Column(String, default="")
     occupation = Column(String, default="")

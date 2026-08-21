@@ -130,6 +130,7 @@ class ClinicalHistoryBase(BaseModel):
     examen_intraoral: Optional[ClinicalText] = ""
     plan_tratamiento: Optional[ClinicalText] = ""
     observaciones: Optional[ClinicalText] = ""
+    document_type: Optional[constr(regex=r"^(|AS|CD|CC|CE|CN|DE|MS|NI|UN|OTRO|PA|PE|PT|RC|TI|PEP|PPT)$")] = ""
     document_id: Optional[DocumentText] = ""
     birth_date: Optional[DateText] = ""
     address: Optional[ShortText] = ""
@@ -272,7 +273,7 @@ class PatientBase(BaseModel):
     email: Optional[OptionalEmailText] = None
     assigned_user_id: Optional[PositiveId] = None
     gender: Optional[constr(regex=r"^(|male|female|other|unspecified)$")] = ""
-    document_type: Optional[ShortText] = ""
+    document_type: Optional[constr(regex=r"^(|AS|CD|CC|CE|CN|DE|MS|NI|UN|OTRO|PA|PE|PT|RC|TI|PEP|PPT)$")] = ""
     document_number: Optional[DocumentText] = ""
     birth_date: Optional[DateText] = ""
     blood_type: Optional[ShortText] = ""
