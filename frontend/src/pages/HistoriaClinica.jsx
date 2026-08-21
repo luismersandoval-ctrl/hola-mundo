@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect, useCallback, useContext, useMemo } from 'react'
+import { createContext, useState, useEffect, useCallback, useContext, useMemo, useRef } from 'react'
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import axios from 'axios'
 import { Button } from '@/components/ui/button'
@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { PhoneInput } from '@/components/PhoneInput'
+import { PatientImaging } from '@/components/PatientImaging'
+import { DOCUMENT_TYPES } from '@/lib/patientOptions'
 import {
   ArrowLeft,
   Save,
@@ -25,6 +27,12 @@ import {
   Phone,
   Mail,
   Pencil,
+  Images,
+  BookOpenCheck,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react'
 
 const API = '/api'
@@ -32,6 +40,11 @@ const ClinicalReadOnlyContext = createContext(false)
 
 // Tab definitions with color schemes
 const TABS = [
+  {
+    id: 'anamnesis', label: 'Anamnesis', icon: BookOpenCheck, color: 'violet',
+    gradient: 'from-violet-500/20 to-violet-600/5', ring: 'ring-violet-500/30',
+    text: 'text-violet-500 dark:text-violet-300', bg: 'bg-violet-500/10', bgHover: 'hover:bg-violet-500/15', border: 'border-violet-500/30',
+  },
   {
     id: 'motivo',
     label: 'Motivo de Consulta',
@@ -80,6 +93,18 @@ const TABS = [
     bgHover: 'hover:bg-emerald-500/15',
     border: 'border-emerald-500/20',
   },
+  {
+    id: 'imagenes',
+    label: 'Imágenes diagnósticas',
+    icon: Images,
+    color: 'cyan',
+    gradient: 'from-cyan-500/20 to-cyan-600/5',
+    ring: 'ring-cyan-500/30',
+    text: 'text-cyan-400',
+    bg: 'bg-cyan-500/10',
+    bgHover: 'hover:bg-cyan-500/15',
+    border: 'border-cyan-500/20',
+  },
 ]
 
 const emptyForm = {
@@ -92,19 +117,23 @@ const emptyForm = {
   examen_intraoral: '',
   plan_tratamiento: '',
   observaciones: '',
-  document_id: '', birth_date: '', address: '', occupation: '', emergency_contact: '', emergency_phone: '',
+  document_type: '', document_id: '', birth_date: '', address: '', occupation: '', emergency_contact: '', emergency_relationship: '', emergency_phone: '',
   blood_type: '', insurance: '', family_history: '', dental_history: '', oral_hygiene: '', vital_signs: '', diagnosis: '',
+  current_illness: '', personal_history: '', pathological_history: '', pharmacological_history: '', systems_review: '',
+  physical_exam: '', risk_factors: '', cups_code: '', cups_name: '', consultation_purpose: '', external_cause: '',
+  diagnosis_type: '', related_diagnoses: '', diagnostic_impression: '',
 }
 
 function TextArea({ label, icon: Icon, value, onChange, placeholder, rows = 4, colorClass = 'text-zinc-400' }) {
   const readOnly = useContext(ClinicalReadOnlyContext)
   return (
     <div className="space-y-2 group">
-      <Label className="flex items-center gap-2 text-sm font-medium text-zinc-300 group-focus-within:text-white transition-colors">
+      <Label className="flex items-center gap-2 text-sm font-medium text-zinc-800 transition-colors group-focus-within:text-zinc-950 dark:text-zinc-300 dark:group-focus-within:text-white">
         {Icon && <Icon className={`w-4 h-4 ${colorClass}`} />}
         {label}
       </Label>
       <textarea
+        maxLength={12000}
         value={value}
         onChange={onChange}
         placeholder={placeholder}
@@ -134,6 +163,16 @@ export default function HistoriaClinica() {
   const [savingPatient, setSavingPatient] = useState(false)
   const [patientEditError, setPatientEditError] = useState('')
   const [patientForm, setPatientForm] = useState({ first_name:'', first_surname:'', phone_country_code:'+57', phone:'', email:'', gender:'unspecified' })
+  const [cupsOpen, setCupsOpen] = useState(false)
+  const [cupsCategory, setCupsCategory] = useState('odontology')
+  const [cupsSearch, setCupsSearch] = useState('')
+  const [cupsResults, setCupsResults] = useState([])
+  const [cupsTotal, setCupsTotal] = useState(0)
+  const [cupsPage, setCupsPage] = useState(1)
+  const [cupsTotalPages, setCupsTotalPages] = useState(1)
+  const [cupsLoading, setCupsLoading] = useState(false)
+  const [cupsError, setCupsError] = useState('')
+  const cupsListRef = useRef(null)
 
   const token = localStorage.getItem('token')
   const config = useMemo(() => ({ headers: { Authorization: `Bearer ${token}` } }), [token])
@@ -146,6 +185,7 @@ export default function HistoriaClinica() {
         axios.get(`${API}/patients/${patientId}/clinical-history`, config),
       ])
       setPatient(patientRes.data)
+      setForm((current) => ({...current, document_type: patientRes.data.document_type || current.document_type, document_id: patientRes.data.document_number || current.document_id, birth_date: patientRes.data.birth_date || current.birth_date}))
       if (historyRes.data.length > 0) {
         const h = historyRes.data[0]
         setHistoryId(h.id)
@@ -160,9 +200,12 @@ export default function HistoriaClinica() {
           examen_intraoral: h.examen_intraoral || '',
           plan_tratamiento: h.plan_tratamiento || '',
           observaciones: h.observaciones || '',
-          document_id: h.document_id || '', birth_date: h.birth_date || '', address: h.address || '', occupation: h.occupation || '',
-          emergency_contact: h.emergency_contact || '', emergency_phone: h.emergency_phone || '', blood_type: h.blood_type || '', insurance: h.insurance || '',
+          document_type: h.document_type || patientRes.data.document_type || '', document_id: h.document_id || patientRes.data.document_number || '', birth_date: h.birth_date || patientRes.data.birth_date || '', address: h.address || '', occupation: h.occupation || '',
+          emergency_contact: h.emergency_contact || '', emergency_relationship: h.emergency_relationship || '', emergency_phone: h.emergency_phone || '', blood_type: h.blood_type || '', insurance: h.insurance || '',
           family_history: h.family_history || '', dental_history: h.dental_history || '', oral_hygiene: h.oral_hygiene || '', vital_signs: h.vital_signs || '', diagnosis: h.diagnosis || '',
+          current_illness: h.current_illness || '', personal_history: h.personal_history || '', pathological_history: h.pathological_history || '', pharmacological_history: h.pharmacological_history || '',
+          systems_review: h.systems_review || '', physical_exam: h.physical_exam || '', risk_factors: h.risk_factors || '', cups_code: h.cups_code || '', cups_name: h.cups_name || '',
+          consultation_purpose: h.consultation_purpose || '', external_cause: h.external_cause || '', diagnosis_type: h.diagnosis_type || '', related_diagnoses: h.related_diagnoses || '', diagnostic_impression: h.diagnostic_impression || '',
         })
       }
     } catch (e) {
@@ -181,6 +224,40 @@ export default function HistoriaClinica() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData()
   }, [fetchData])
+
+  useEffect(() => {
+    if (!cupsOpen) return undefined
+    const requestTimer = window.setTimeout(async () => {
+      setCupsLoading(true)
+      setCupsError('')
+      try {
+        const { data } = await axios.get(`${API}/catalogs/cups`, { ...config, params: { search: cupsSearch, category: cupsCategory, page: cupsPage, limit: 60 } })
+        setCupsResults(data.items)
+        setCupsTotal(data.total)
+        setCupsPage(data.page)
+        setCupsTotalPages(data.total_pages)
+      } catch (requestError) {
+        setCupsResults([])
+        setCupsTotal(0)
+        setCupsTotalPages(1)
+        setCupsError(requestError.response?.status === 404 ? 'El servidor necesita reiniciarse para cargar el catálogo CUPS 2026.' : 'No fue posible consultar el catálogo CUPS. Intenta nuevamente.')
+      } finally {
+        setCupsLoading(false)
+      }
+    }, 200)
+    return () => window.clearTimeout(requestTimer)
+  }, [cupsOpen, cupsSearch, cupsCategory, cupsPage, config])
+
+  const selectCups = (item) => {
+    setForm((current) => ({ ...current, cups_code: item.code, cups_name: item.name }))
+    setSaved(false)
+    setCupsOpen(false)
+  }
+
+  const changeCupsPage = (nextPage) => {
+    setCupsPage(nextPage)
+    cupsListRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   const handleChange = (field) => (e) => {
     setForm((prev) => ({ ...prev, [field]: e.target.value }))
@@ -368,7 +445,7 @@ export default function HistoriaClinica() {
                   </div>
                 )}
                 {!historyId && (
-                  <div className="ml-auto flex items-center gap-2 text-amber-400/70 text-xs bg-amber-500/10 px-3 py-1.5 rounded-full border border-amber-500/20">
+                  <div className="ml-auto flex items-center gap-2 rounded-full border border-blue-300 bg-blue-100 px-3 py-1.5 text-xs font-semibold text-blue-800 dark:border-blue-400/30 dark:bg-blue-500/15 dark:text-blue-200">
                     <FileText className="w-3.5 h-3.5" />
                     Nuevo expediente
                   </div>
@@ -394,10 +471,44 @@ export default function HistoriaClinica() {
           </DialogContent>
         </Dialog>
 
-        <Card className="glass border-white/10 shadow-lg mb-6"><CardHeader><CardTitle className="text-white">Datos complementarios y valoración integral</CardTitle><p className="text-sm text-zinc-500">Identificación, contacto de emergencia, antecedentes odontológicos y diagnóstico.</p></CardHeader><CardContent className="space-y-5">
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">{[
-            ['document_id','Documento','text'],['birth_date','Fecha de nacimiento','date'],['blood_type','Grupo sanguíneo','text'],['occupation','Ocupación','text'],
-            ['address','Dirección','text'],['insurance','EPS / aseguradora','text'],['emergency_contact','Contacto de emergencia','text'],['emergency_phone','Teléfono de emergencia','tel'],
+        <Dialog open={cupsOpen} onOpenChange={setCupsOpen}>
+          <DialogContent className="glass max-h-[82vh] overflow-hidden border-white/10 text-white sm:max-w-4xl">
+            <DialogHeader><DialogTitle>Tipos de consulta y procedimientos CUPS 2026</DialogTitle></DialogHeader>
+            <div className="space-y-4 overflow-hidden">
+              <Input value={cupsSearch} onChange={(event) => { setCupsSearch(event.target.value); setCupsPage(1) }} placeholder="Buscar por código o descripción..." className="border-white/10 bg-white/5" autoFocus />
+              <div className="flex gap-2 border-b border-white/10">
+                <button type="button" onClick={() => { setCupsCategory('odontology'); setCupsPage(1) }} className={`px-3 py-2 text-sm font-semibold ${cupsCategory === 'odontology' ? 'border-b-2 border-primary text-primary' : 'text-zinc-400'}`}>Usados en odontología</button>
+                <button type="button" onClick={() => { setCupsCategory('all'); setCupsPage(1) }} className={`px-3 py-2 text-sm font-semibold ${cupsCategory === 'all' ? 'border-b-2 border-primary text-primary' : 'text-zinc-400'}`}>Todos los CUPS</button>
+              </div>
+              <p className="text-xs text-zinc-400">{cupsLoading ? 'Buscando...' : `${cupsTotal.toLocaleString('es-CO')} resultados · se muestran hasta 60`}</p>
+              {cupsError && <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">{cupsError}</div>}
+              <div ref={cupsListRef} className="max-h-[50vh] overflow-y-auto rounded-xl border border-white/10">
+                {cupsResults.map((item) => <button key={item.code} type="button" onClick={() => selectCups(item)} className="grid w-full grid-cols-[90px_1fr_auto] items-center gap-3 border-b border-white/10 px-4 py-3 text-left hover:bg-primary/10">
+                  <span className="font-mono text-sm font-semibold text-primary">{item.code}</span>
+                  <span className="text-sm text-zinc-800 dark:text-zinc-100">{item.name}</span>
+                  {item.priority && <span className="rounded-full bg-violet-500/15 px-2 py-1 text-[10px] font-bold text-violet-700 dark:text-violet-300">FRECUENTE</span>}
+                </button>)}
+                {!cupsLoading && !cupsError && cupsResults.length === 0 && <p className="p-8 text-center text-sm text-zinc-400">No se encontraron códigos con ese criterio.</p>}
+              </div>
+              {!cupsError && cupsTotal > 0 && <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-zinc-500">Página {cupsPage.toLocaleString('es-CO')} de {cupsTotalPages.toLocaleString('es-CO')}</p>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" size="icon" aria-label="Ir a la primera página" title="Primera página" disabled={cupsLoading || cupsPage <= 1} onClick={() => changeCupsPage(1)}><ChevronsLeft className="h-4 w-4" /></Button>
+                  <Button type="button" variant="outline" size="sm" disabled={cupsLoading || cupsPage <= 1} onClick={() => changeCupsPage(cupsPage - 1)}><ChevronLeft className="mr-1 h-4 w-4" />Anterior</Button>
+                  <Button type="button" variant="outline" size="sm" disabled={cupsLoading || cupsPage >= cupsTotalPages} onClick={() => changeCupsPage(cupsPage + 1)}>Siguiente<ChevronRight className="ml-1 h-4 w-4" /></Button>
+                  <Button type="button" variant="outline" size="icon" aria-label="Ir a la última página" title="Última página" disabled={cupsLoading || cupsPage >= cupsTotalPages} onClick={() => changeCupsPage(cupsTotalPages)}><ChevronsRight className="h-4 w-4" /></Button>
+                </div>
+              </div>}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Card className="glass border-white/10 shadow-lg mb-6"><CardContent className="space-y-5 pt-6">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div><Label>Tipo de documento</Label><select disabled={readOnly} value={form.document_type} onChange={handleChange('document_type')} className="mt-1 h-10 w-full rounded-md border border-white/10 bg-background px-3 text-sm text-foreground"><option value="">Seleccionar...</option>{DOCUMENT_TYPES.map(([code,label])=><option key={code} value={code}>{code} · {label}</option>)}</select></div>
+            {[
+            ['document_id','Número de documento','text'],['birth_date','Fecha de nacimiento','date'],['blood_type','Grupo sanguíneo','text'],['occupation','Ocupación','text'],
+            ['address','Dirección','text'],['insurance','EPS / aseguradora','text'],['emergency_contact','Contacto de emergencia','text'],['emergency_relationship','Parentesco','text'],['emergency_phone','Teléfono de emergencia','tel'],
           ].map(([key,label,type])=><div key={key}><Label>{label}</Label><input type={type} readOnly={readOnly} value={form[key]} onChange={handleChange(key)} className="mt-1 flex h-10 w-full rounded-md border border-white/10 bg-white/[0.03] px-3 text-sm text-white read-only:opacity-70" /></div>)}</div>
           <ClinicalReadOnlyContext.Provider value={readOnly}><div className="grid md:grid-cols-2 gap-4"><TextArea label="Antecedentes familiares" value={form.family_history} onChange={handleChange('family_history')} placeholder="Diabetes, hipertensión, cardiopatías, enfermedades hereditarias..." rows={3} /><TextArea label="Antecedentes odontológicos" value={form.dental_history} onChange={handleChange('dental_history')} placeholder="Experiencias previas, tratamientos, anestesia, sangrado..." rows={3} /><TextArea label="Hábitos de higiene oral" value={form.oral_hygiene} onChange={handleChange('oral_hygiene')} placeholder="Frecuencia de cepillado, seda dental, enjuague..." rows={3} /><TextArea label="Signos vitales" value={form.vital_signs} onChange={handleChange('vital_signs')} placeholder="Presión arterial, frecuencia cardíaca, temperatura..." rows={3} /><div className="md:col-span-2"><TextArea label="Diagnóstico integral" value={form.diagnosis} onChange={handleChange('diagnosis')} placeholder="Diagnóstico clínico sustentado en examen e información del odontograma..." rows={4} /></div></div></ClinicalReadOnlyContext.Provider>
         </CardContent></Card>
@@ -429,6 +540,36 @@ export default function HistoriaClinica() {
         {readOnly && <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">Modo de consulta: el personal administrativo puede visualizar este expediente, pero no modificarlo.</div>}
         {/* Tab Content */}
         <ClinicalReadOnlyContext.Provider value={readOnly}><div className="space-y-6">
+          {activeTab === 'anamnesis' && (
+            <div className="space-y-6">
+              <Card className="glass overflow-hidden border-white/10 shadow-lg">
+                <div className={`absolute inset-0 bg-gradient-to-br ${currentTab.gradient} pointer-events-none`} />
+                <CardHeader className="relative"><CardTitle className="flex items-center gap-3 text-lg text-white"><div className={`rounded-lg p-2 ${currentTab.bg}`}><BookOpenCheck className={`h-5 w-5 ${currentTab.text}`} /></div>Anamnesis</CardTitle><p className="ml-12 text-sm text-zinc-500">Interrogatorio clínico y antecedentes relevantes del paciente</p></CardHeader>
+                <CardContent className="relative grid gap-5 md:grid-cols-2">
+                  <div className="md:col-span-2"><TextArea label="Enfermedad actual" value={form.current_illness} onChange={handleChange('current_illness')} placeholder="Evolución, inicio, intensidad, síntomas asociados y tratamientos previos..." rows={4} /></div>
+                  <TextArea label="Antecedentes personales" value={form.personal_history} onChange={handleChange('personal_history')} placeholder="Antecedentes personales relevantes..." rows={4} />
+                  <TextArea label="Antecedentes familiares" value={form.family_history} onChange={handleChange('family_history')} placeholder="Antecedentes familiares relevantes..." rows={4} />
+                  <TextArea label="Antecedentes patológicos" value={form.pathological_history} onChange={handleChange('pathological_history')} placeholder="Enfermedades previas y condiciones crónicas..." rows={4} />
+                  <TextArea label="Antecedentes farmacológicos" value={form.pharmacological_history} onChange={handleChange('pharmacological_history')} placeholder="Medicamentos actuales o anteriores..." rows={4} />
+                  <TextArea label="Revisión por sistemas" value={form.systems_review} onChange={handleChange('systems_review')} placeholder="Hallazgos organizados por sistemas..." rows={4} />
+                  <TextArea label="Factores de riesgo" value={form.risk_factors} onChange={handleChange('risk_factors')} placeholder="Tipo de riesgo y descripción: químicos, físicos, biomecánicos, psicosociales o biológicos..." rows={4} />
+                  <div className="md:col-span-2"><TextArea label="Examen físico" value={form.physical_exam} onChange={handleChange('physical_exam')} placeholder="Hallazgos del examen físico..." rows={5} /></div>
+                </CardContent>
+              </Card>
+
+              <Card className="glass border-white/10 shadow-lg">
+                <CardHeader><CardTitle className="text-lg text-white">Información RIPS</CardTitle><p className="text-sm text-zinc-500">Código CUPS oficial y datos asociados a la consulta</p></CardHeader>
+                <CardContent className="space-y-5">
+                  <div><Label>Tipo de consulta o procedimiento CUPS</Label><div className="mt-1 flex gap-2"><Input readOnly value={form.cups_code ? `${form.cups_code} · ${form.cups_name}` : ''} placeholder="Selecciona un código CUPS..." className="border-white/10 bg-white/5" /><Button type="button" variant="outline" disabled={readOnly} onClick={() => setCupsOpen(true)} className="shrink-0 border-violet-500/30 text-violet-700 dark:text-violet-200"><Search className="mr-2 h-4 w-4" />Buscar CUPS</Button></div></div>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    {[['consultation_purpose','Finalidad de consulta','Ej: valoración odontológica integral'],['external_cause','Causa externa','Ej: enfermedad general'],['diagnosis_type','Tipo de diagnóstico','Ej: impresión diagnóstica']].map(([field,label,placeholder]) => <div key={field}><Label className="text-zinc-800 dark:text-zinc-300">{label}</Label><Input disabled={readOnly} maxLength={500} value={form[field]} onChange={handleChange(field)} placeholder={placeholder} className="mt-1 border-white/10 bg-white/5 text-zinc-950 placeholder:text-zinc-500 dark:text-white" /></div>)}
+                  </div>
+                  <div className="grid gap-5 md:grid-cols-2"><TextArea label="Diagnósticos relacionados" value={form.related_diagnoses} onChange={handleChange('related_diagnoses')} placeholder="Códigos y descripciones de diagnósticos relacionados..." rows={4} /><TextArea label="Impresión diagnóstica" value={form.diagnostic_impression} onChange={handleChange('diagnostic_impression')} placeholder="Impresión clínica sustentada en la valoración..." rows={4} /></div>
+                  <p className="text-xs text-zinc-500">Catálogo CUPS 2026: 13.640 registros, Resolución 2706 de 2025. Los diagnósticos CIE-10 se integrarán desde su catálogo oficial correspondiente.</p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
           {/* Motivo de Consulta */}
           {activeTab === 'motivo' && (
             <Card className={`glass border-white/10 shadow-lg overflow-hidden`}>
@@ -593,7 +734,7 @@ export default function HistoriaClinica() {
                 </p>
               </CardHeader>
               <CardContent className="relative space-y-6">
-                <Button type="button" variant="outline" onClick={() => navigate(`/pacientes/${patientId}?tab=treatments`)} className="border-emerald-500/30 text-emerald-300"><ClipboardList className="w-4 h-4 mr-2" />Abrir plan estructurado, costos y odontograma</Button>
+                <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={() => navigate(`/pacientes/${patientId}?tab=treatments`)} className="border-emerald-500/30 text-emerald-300"><ClipboardList className="w-4 h-4 mr-2" />Abrir plan estructurado, costos y odontograma</Button>{['dentist','specialist'].includes(currentUser?.role)&&<Button type="button" variant="outline" onClick={() => navigate(`/pacientes/${patientId}?tab=evolutions`)} className="border-blue-500/30 text-blue-300"><FileText className="mr-2 h-4 w-4"/>Registrar evolución clínica</Button>}</div>
                 <TextArea
                   label="Plan de Tratamiento"
                   icon={ClipboardList}
@@ -605,6 +746,10 @@ export default function HistoriaClinica() {
                 />
               </CardContent>
             </Card>
+          )}
+
+          {activeTab === 'imagenes' && (
+            <PatientImaging patientId={patientId} readOnly={readOnly} />
           )}
         </div></ClinicalReadOnlyContext.Provider>
 

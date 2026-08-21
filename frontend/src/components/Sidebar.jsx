@@ -1,14 +1,16 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
-  Activity, FileText, CreditCard, Calendar, Boxes, BarChart3, BellRing, Settings2,
+  Activity, FileText, CreditCard, Calendar, Boxes, BarChart3, BellRing, Settings2, ClipboardList,
   ChevronLeft, ChevronRight, LogOut, Stethoscope, X, UsersRound, Moon, Sun, Waves,
 } from 'lucide-react'
 import { LanguageToggle, useLanguage } from '@/lib/i18n'
+import odontoSpaceLogo from '@/assets/brand/odontospace-logo.png'
 
 const menuItems = [
   { 
     section: 'Principal', sectionKey:'main',
     items: [
+      { icon: Activity, label: 'Dashboard', labelKey:'dashboard', path: '/dashboard', badge: null },
       { icon: Calendar, label: 'Agenda', labelKey:'agenda', path: '/agenda', badge: null },
     ]
   },
@@ -29,22 +31,17 @@ const menuItems = [
   {
     section: 'Finanzas', sectionKey:'finance',
     items: [
-      { icon: CreditCard, label: 'Pagos y Caja', labelKey:'payments', path: '/pagos', badge: 'Demo' },
-      { icon: Boxes, label: 'Inventario', labelKey:'inventory', path: '/inventario', badge: null },
+      { icon: CreditCard, label: 'Pagos y Caja', labelKey:'payments', path: '/pagos', badge: 'Demo', allowedRoles: ['admin', 'administrative'] },
+      { icon: Boxes, label: 'Inventario', labelKey:'inventory', path: '/inventario', badge: null, allowedRoles: ['admin', 'administrative'] },
       { icon: BarChart3, label: 'Reportes', labelKey:'reports', path: '/reportes', badge: null, allowedRoles: ['admin', 'administrative'] },
-    ]
-  },
-  {
-    section: 'Resumen', sectionKey:'summary',
-    items: [
-      { icon: Activity, label: 'Dashboard', labelKey:'dashboard', path: '/dashboard', badge: null },
     ]
   },
   {
     section: 'Configuración', sectionKey:'settings',
     items: [
-      { icon: Settings2, label: 'Integraciones', labelKey:'integrations', path: '/integraciones', badge: null, adminOnly: true },
+      { icon: Settings2, label: 'Integraciones', labelKey:'integrations', path: '/integraciones', badge: null, allowedRoles: ['admin', 'dentist', 'specialist', 'administrative'] },
       { icon: UsersRound, label: 'Equipo', labelKey:'team', path: '/personal', badge: null, ownerOnly: true },
+      { icon: ClipboardList, label: 'Planes de tratamiento', labelKey:'treatmentPlans', path: '/planes-tratamiento', badge: null, ownerOnly: true },
     ]
   },
 ]
@@ -62,16 +59,8 @@ export function Sidebar({ collapsed, mobileOpen, onMobileClose, onCollapsedChang
         glass border-r border-white/10 bg-black/40`}
     >
       {/* Logo */}
-      <div className={`flex items-center gap-3 p-4 border-b border-white/10 min-h-[68px]`}>
-        <div className="p-2 bg-primary/20 rounded-xl ring-1 ring-primary/30 shrink-0">
-          <Activity className="w-6 h-6 text-primary" />
-        </div>
-        {!collapsed && (
-          <div className="overflow-hidden transition-all duration-300">
-            <h2 className="text-lg font-bold text-white tracking-tight whitespace-nowrap">OdontoSpace</h2>
-            <p className="max-w-[170px] truncate text-[11px] font-medium text-primary">{currentUser?.clinic_name || t('clinicManagement')}</p>
-          </div>
-        )}
+      <div className={`flex items-center gap-3 border-b border-white/10 ${collapsed?'min-h-[72px] justify-center p-2':'min-h-[92px] p-4'}`}>
+        {collapsed?<div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200" title="OdontoSpace"><img src={odontoSpaceLogo} alt="OdontoSpace" className="absolute -left-1 -top-1 h-auto w-[150px] max-w-none" /></div>:<div className="min-w-0 overflow-hidden rounded-xl bg-white/95 px-2 pb-2 transition-all duration-300"><img src={odontoSpaceLogo} alt="OdontoSpace" className="h-auto w-[205px]"/><p className="-mt-6 ml-[52px] max-w-[145px] truncate text-xs font-semibold text-violet-800" title={currentUser?.clinic_name || t('clinicManagement')}>{currentUser?.clinic_name || t('clinicManagement')}</p></div>}
         <button type="button" onClick={onMobileClose} aria-label="Cerrar menú" className="ml-auto p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 lg:hidden">
           <X className="w-5 h-5" />
         </button>
@@ -96,8 +85,9 @@ export function Sidebar({ collapsed, mobileOpen, onMobileClose, onCollapsedChang
                 return (
                   <button
                     key={item.path}
+                    data-active={isActive}
                     onClick={() => { navigate(item.path); onMobileClose() }}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
+                    className={`sidebar-nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
                       ${isActive 
                         ? 'bg-primary/15 text-primary shadow-sm shadow-primary/5 ring-1 ring-primary/20' 
                         : 'text-zinc-400 hover:text-white hover:bg-white/5'}

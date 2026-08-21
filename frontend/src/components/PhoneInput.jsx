@@ -1,4 +1,5 @@
 import { Input } from '@/components/ui/input'
+import { INPUT_LIMITS, normalizePhone } from '@/lib/validation'
 
 const countryCodes=[
   ['🇨🇴','+57','Colombia'],['🇺🇸','+1','Estados Unidos / Canadá'],['🇲🇽','+52','México'],
@@ -9,9 +10,9 @@ const countryCodes=[
 
 export function PhoneInput({countryCode='+57',phone='',onCountryCodeChange,onPhoneChange,placeholder='Celular',id}){
   return <div className="flex min-w-0 gap-2">
-    <select aria-label="Prefijo telefónico internacional" value={countryCode} onChange={e=>onCountryCodeChange(e.target.value)} className="h-10 w-[92px] shrink-0 rounded-md border border-white/10 bg-zinc-900 px-1.5 text-sm">
+    <select aria-label="Prefijo telefónico internacional" value={countryCode} onChange={e=>onCountryCodeChange(e.target.value)} className="h-10 w-[92px] shrink-0 rounded-md border border-white/10 bg-white/5 px-1.5 text-sm text-foreground">
       {countryCodes.map(([flag,code,country])=><option key={`${country}-${code}`} value={code}>{flag} {code}</option>)}
     </select>
-    <Input id={id} type="tel" inputMode="numeric" pattern="[0-9]*" maxLength="15" placeholder={placeholder} value={phone} onChange={e=>onPhoneChange(e.target.value.replace(/\D/g,''))} className="min-w-0 bg-white/5 border-white/10"/>
+    <Input id={id} type="tel" inputMode="numeric" pattern="[0-9]*" maxLength={INPUT_LIMITS.phone} placeholder={placeholder} value={phone} onChange={e=>onPhoneChange(normalizePhone(e.target.value))} className="min-w-0 bg-white/5 border-white/10"/>
   </div>
 }

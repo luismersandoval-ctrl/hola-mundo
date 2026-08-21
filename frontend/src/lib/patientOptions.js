@@ -1,0 +1,17 @@
+export const DOCUMENT_TYPES = [
+  ['AS', 'Adulto sin identificación'],
+  ['CD', 'Carné diplomático'],
+  ['CC', 'Cédula de ciudadanía'],
+  ['CE', 'Cédula de extranjería'],
+  ['CN', 'Certificado de nacido vivo'],
+  ['DE', 'Documento extranjero'],
+  ['MS', 'Menor sin identificación'],
+  ['NI', 'Número de identificación tributaria'],
+  ['UN', 'Número único de identificación'],
+  ['OTRO', 'Otro'],
+  ['PA', 'Pasaporte'],
+  ['PE', 'Permiso especial de permanencia'],
+  ['PT', 'Permiso por protección temporal'],
+  ['RC', 'Registro civil'],
+  ['TI', 'Tarjeta de identidad'],
+]
