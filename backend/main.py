@@ -15,10 +15,13 @@ import hmac
 import re
 import secrets
 import smtplib
+import subprocess
+import tempfile
 import uuid
 import unicodedata
 import zipfile
 import xml.etree.ElementTree as ET
+from xml.sax.saxutils import escape as xml_escape
 from functools import lru_cache
 from email.message import EmailMessage
 from pathlib import Path
@@ -52,11 +55,53 @@ def load_cups_catalog():
     return rows
 
 
+def create_editable_docx(content: str) -> bytes:
+    paragraphs = content.splitlines() or [""]
+    body = "".join(
+        f'<w:p><w:r><w:t xml:space="preserve">{xml_escape(paragraph)}</w:t></w:r></w:p>'
+        for paragraph in paragraphs
+    )
+    document_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>{body}<w:sectPr/></w:body></w:document>'''
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as document:
+        document.writestr("[Content_Types].xml", '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>''')
+        document.writestr("_rels/.rels", '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>''')
+        document.writestr("word/document.xml", document_xml)
+        document.writestr("word/_rels/document.xml.rels", '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>''')
+    return output.getvalue()
+
+
+def convert_pdf_to_docx(contents: bytes):
+    with tempfile.TemporaryDirectory(prefix="odontospace-pdf-") as temporary_directory:
+        source = Path(temporary_directory) / "source.pdf"
+        source.write_bytes(contents)
+        try:
+            result = subprocess.run(
+                ["pdftotext", "-layout", "-nopgbrk", str(source), "-"],
+                check=False, capture_output=True, timeout=20,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise HTTPException(status_code=422, detail="No fue posible convertir el PDF de forma segura.") from exc
+    if result.returncode != 0:
+        raise HTTPException(status_code=422, detail="El PDF está dañado, protegido o no se puede convertir.")
+    try:
+        content = result.stdout.decode("utf-8").strip()
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=422, detail="No fue posible interpretar el texto del PDF.") from exc
+    if len(content) < 20:
+        raise HTTPException(status_code=422, detail="El PDF parece escaneado y no contiene texto editable. Requiere OCR antes de convertirlo.")
+    return content, create_editable_docx(content)
+
+
 def extract_consent_template(filename: str, contents: bytes):
     extension = Path(filename).suffix.lower()
     if extension == ".txt":
         try:
-            return contents.decode("utf-8-sig").strip()
+            content = contents.decode("utf-8-sig").strip()
+            return content, create_editable_docx(content), "converted"
         except UnicodeDecodeError as exc:
             raise HTTPException(status_code=422, detail="El archivo TXT debe estar codificado en UTF-8.") from exc
     if extension == ".docx":
@@ -77,11 +122,12 @@ def extract_consent_template(filename: str, contents: bytes):
             text_value = "".join(node.text or "" for node in paragraph.findall(".//w:t", namespace)).strip()
             if text_value:
                 paragraphs.append(text_value)
-        return "\n\n".join(paragraphs).strip()
+        return "\n\n".join(paragraphs).strip(), None, "native"
     if extension == ".pdf":
         if not contents.startswith(b"%PDF-"):
             raise HTTPException(status_code=422, detail="El archivo PDF no tiene una firma válida.")
-        return ""
+        content, editable_document = convert_pdf_to_docx(contents)
+        return content, editable_document, "converted"
     raise HTTPException(status_code=422, detail="Adjunta una plantilla DOCX, TXT o PDF.")
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
@@ -187,6 +233,15 @@ def migrate_existing_database():
         consent_columns = table_columns(connection, "patient_consents")
         if "template_id" not in consent_columns:
             add_column(connection, "patient_consents", "template_id", "INTEGER")
+        template_columns = table_columns(connection, "consent_templates")
+        template_additions = {
+            "editable_filename": "VARCHAR DEFAULT ''",
+            "editable_stored_filename": "VARCHAR DEFAULT ''",
+            "conversion_status": "VARCHAR DEFAULT 'native'",
+        }
+        for column, definition in template_additions.items():
+            if column not in template_columns:
+                add_column(connection, "consent_templates", column, definition)
         treatment_columns = table_columns(connection, "treatments")
         if "catalog_item_id" not in treatment_columns:
             add_column(connection, "treatments", "catalog_item_id", "INTEGER")
@@ -960,7 +1015,7 @@ async def upload_consent_template(
     original_filename = Path(file.filename or "plantilla").name
     if not re.fullmatch(r"[\w .()\-áéíóúÁÉÍÓÚñÑ]{1,180}", original_filename):
         raise HTTPException(status_code=422, detail="El nombre del archivo contiene caracteres no permitidos.")
-    extracted_content = extract_consent_template(original_filename, contents)
+    extracted_content, editable_document, conversion_status = extract_consent_template(original_filename, contents)
     template_name = " ".join((name or Path(original_filename).stem).strip().split())
     if not 3 <= len(template_name) <= 160:
         raise HTTPException(status_code=422, detail="El nombre de la plantilla debe tener entre 3 y 160 caracteres.")
@@ -971,9 +1026,19 @@ async def upload_consent_template(
     if destination.parent != CONSENT_TEMPLATE_ROOT:
         raise HTTPException(status_code=422, detail="La ruta del archivo no es válida.")
     destination.write_bytes(contents)
+    editable_filename = original_filename if extension == ".docx" else f"{Path(original_filename).stem}-editable.docx"
+    editable_stored_filename = stored_filename
+    if editable_document is not None:
+        editable_stored_filename = f"{uuid.uuid4().hex}.docx"
+        editable_destination = (CONSENT_TEMPLATE_ROOT / editable_stored_filename).resolve()
+        if editable_destination.parent != CONSENT_TEMPLATE_ROOT:
+            raise HTTPException(status_code=422, detail="La ruta del documento editable no es válida.")
+        editable_destination.write_bytes(editable_document)
     record = models.ConsentTemplate(
         clinic_id=current_user.clinic_id, name=template_name, content=extracted_content,
         original_filename=original_filename, stored_filename=stored_filename,
+        editable_filename=editable_filename, editable_stored_filename=editable_stored_filename,
+        conversion_status=conversion_status,
         content_type=safe_content_type, size_bytes=len(contents),
         created_by=current_user.display_name,
     )
@@ -989,6 +1054,18 @@ def download_consent_template(template_id: int, db: Session = Depends(database.g
     if source.parent != CONSENT_TEMPLATE_ROOT or not source.is_file():
         raise HTTPException(status_code=404, detail="El archivo original no está disponible.")
     return FileResponse(source, media_type=template.content_type, filename=template.original_filename)
+
+@app.get("/consent-templates/{template_id}/editable-file")
+def download_editable_consent_template(template_id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    template = db.query(models.ConsentTemplate).filter(models.ConsentTemplate.id == template_id, models.ConsentTemplate.clinic_id == current_user.clinic_id).first()
+    if not template:
+        raise HTTPException(status_code=404, detail="Plantilla no encontrada.")
+    stored_filename = template.editable_stored_filename or (template.stored_filename if template.original_filename.lower().endswith(".docx") else "")
+    source = (CONSENT_TEMPLATE_ROOT / stored_filename).resolve() if stored_filename else None
+    if not source or source.parent != CONSENT_TEMPLATE_ROOT or not source.is_file():
+        raise HTTPException(status_code=404, detail="La versión DOCX editable no está disponible.")
+    filename = template.editable_filename or f"{Path(template.original_filename).stem}-editable.docx"
+    return FileResponse(source, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document", filename=filename)
 
 @app.post("/patients/{patient_id}/consents", response_model=schemas.PatientConsent)
 def create_patient_consent(patient_id: int, consent: schemas.PatientConsentCreate, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):

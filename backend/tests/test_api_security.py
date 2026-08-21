@@ -156,12 +156,38 @@ def test_consent_template_upload_extracts_text_and_keeps_original(client, admin_
     original = client.get(f"/consent-templates/{template['id']}/file", headers=admin_headers)
     assert original.status_code == 200
     assert original.content == content.encode()
+    editable = client.get(f"/consent-templates/{template['id']}/editable-file", headers=admin_headers)
+    assert editable.status_code == 200
+    assert editable.content.startswith(b"PK")
+    assert template["editable_filename"] == "consentimiento-editable.docx"
+    assert template["conversion_status"] == "converted"
 
     invalid = client.post(
         "/consent-templates", headers=admin_headers,
         files={"file": ("falso.pdf", b"not a pdf", "application/pdf")},
     )
     assert invalid.status_code == 422
+
+
+def test_pdf_consent_keeps_original_and_stores_converted_docx(client, admin_headers, monkeypatch):
+    import main
+
+    converted_text = "Consentimiento extraído automáticamente desde el documento PDF para edición."
+    monkeypatch.setattr(main, "convert_pdf_to_docx", lambda _contents: (converted_text, main.create_editable_docx(converted_text)))
+    response = client.post(
+        "/consent-templates", headers=admin_headers,
+        files={"file": ("cirugia.pdf", b"%PDF-1.7\noriginal-inmutable", "application/pdf")},
+    )
+    assert response.status_code == 200, response.text
+    template = response.json()
+    assert template["content"] == converted_text
+    assert template["original_filename"] == "cirugia.pdf"
+    assert template["editable_filename"] == "cirugia-editable.docx"
+    original = client.get(f"/consent-templates/{template['id']}/file", headers=admin_headers)
+    editable = client.get(f"/consent-templates/{template['id']}/editable-file", headers=admin_headers)
+    assert original.content == b"%PDF-1.7\noriginal-inmutable"
+    assert editable.status_code == 200
+    assert editable.content.startswith(b"PK")
 
 
 def test_cups_catalog_search_and_odontology_filter(client, admin_headers):

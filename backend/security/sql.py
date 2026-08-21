@@ -3,7 +3,7 @@ from sqlalchemy import text
 
 ALLOWED_MIGRATION_TABLES = {
     "appointments", "users", "clinics", "registration_otps", "patients", "payments",
-    "inventory_items", "clinical_histories", "treatments", "clinical_evolutions", "cash_closings", "patient_consents",
+    "inventory_items", "clinical_histories", "treatments", "clinical_evolutions", "cash_closings", "patient_consents", "consent_templates",
 }
 
 ALLOWED_MIGRATION_COLUMNS = {
@@ -21,11 +21,11 @@ ALLOWED_MIGRATION_COLUMNS = {
     "physical_exam", "risk_factors", "cups_code", "cups_name", "consultation_purpose", "external_cause",
     "diagnosis_type", "related_diagnoses", "diagnostic_impression",
     "discount_percent", "treatment_id", "technique", "instruments", "anesthesia", "complications", "observations",
-    "business_date", "template_id",
+    "business_date", "template_id", "editable_filename", "editable_stored_filename", "conversion_status",
 }
 
 ALLOWED_COLUMN_DEFINITIONS = {
-    "VARCHAR", "VARCHAR DEFAULT ''", "VARCHAR DEFAULT '+57'", "VARCHAR DEFAULT 'pending'",
+    "VARCHAR", "VARCHAR DEFAULT ''", "VARCHAR DEFAULT '+57'", "VARCHAR DEFAULT 'pending'", "VARCHAR DEFAULT 'native'",
     "VARCHAR DEFAULT 'OdontoSpace' NOT NULL", "INTEGER", "INTEGER DEFAULT 1", "INTEGER DEFAULT 30",
     "FLOAT DEFAULT 0", "TEXT DEFAULT ''", "TEXT DEFAULT '[]'", "DATE",
 }

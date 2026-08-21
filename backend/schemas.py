@@ -378,6 +378,8 @@ class ConsentTemplate(BaseModel):
     name: str
     content: str = ""
     original_filename: str
+    editable_filename: str = ""
+    conversion_status: str = "native"
     content_type: str
     size_bytes: int = 0
     created_by: str = ""
