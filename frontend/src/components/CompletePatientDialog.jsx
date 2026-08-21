@@ -26,7 +26,7 @@ function Field({ label, required=false, children }) {
 }
 
 function SelectField({ label, value, onChange, options, required=false, placeholder='Seleccionar...' }) {
-  return <Field label={label} required={required}><select required={required} value={value} onChange={onChange} className="mt-1 h-10 w-full rounded-md border border-white/10 bg-zinc-900 px-3 text-sm"><option value="">{placeholder}</option>{options.map(option=>{const [key,text]=Array.isArray(option)?option:[option,option];return <option key={key} value={key}>{text}</option>})}</select></Field>
+  return <Field label={label} required={required}><select required={required} value={value} onChange={onChange} className="mt-1 h-10 w-full rounded-md border border-white/10 bg-white/5 px-3 text-sm text-foreground"><option value="">{placeholder}</option>{options.map(option=>{const [key,text]=Array.isArray(option)?option:[option,option];return <option key={key} value={key}>{text}</option>})}</select></Field>
 }
 
 function Section({ icon:Icon, title, children }) {

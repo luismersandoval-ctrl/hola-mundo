@@ -53,6 +53,10 @@ export default function AgendaPage(){
   const [detailReason,setDetailReason]=useState('')
   const [detailDate,setDetailDate]=useState('')
   const [detailTime,setDetailTime]=useState('')
+  const [detailDuration,setDetailDuration]=useState(15)
+  const [detailStatus,setDetailStatus]=useState('pending')
+  const [detailRoomId,setDetailRoomId]=useState('')
+  const [detailPatientForm,setDetailPatientForm]=useState({first_name:'',first_surname:'',phone_country_code:'+57',phone:'',email:''})
   const [detailBusy,setDetailBusy]=useState([])
   const [detailLoading,setDetailLoading]=useState(false)
   const [detailSaving,setDetailSaving]=useState(false)
@@ -102,13 +106,13 @@ export default function AgendaPage(){
     if(!selectedAppointment||!detailProfessionalId)return null
     const start=new Date(`${detailDate}T${detailTime}:00`)
     const startMinute=minutesOf(start)
-    const endMinute=startMinute+(selectedAppointment.duration_minutes||30)
+    const endMinute=startMinute+Number(detailDuration||15)
     return detailBusy.find(item=>{
       if(item.appointment_id===selectedAppointment.id)return false
       const busyStart=minutesOf(new Date(item.start))
       return startMinute<busyStart+item.duration_minutes&&endMinute>busyStart
     })||null
-  },[detailBusy,detailDate,detailProfessionalId,detailTime,selectedAppointment])
+  },[detailBusy,detailDate,detailDuration,detailProfessionalId,detailTime,selectedAppointment])
   useEffect(()=>{
     if(!appointmentOpen||!selectedAppointment||!detailProfessionalId){return}
     let active=true
@@ -126,25 +130,36 @@ export default function AgendaPage(){
     setDetailReason(appointment.reason||'')
     setDetailDate(appointment.date.slice(0,10))
     setDetailTime(appointment.date.slice(11,16))
+    setDetailDuration(appointment.duration_minutes||15)
+    setDetailStatus(appointment.status||'pending')
+    setDetailRoomId(appointment.room_id||'')
+    const patient=patients.find(item=>item.id===appointment.patient_id)
+    setDetailPatientForm({first_name:patient?.first_name||patient?.name||'',first_surname:patient?.first_surname||'',phone_country_code:patient?.phone_country_code||'+57',phone:patient?.phone||'',email:patient?.email||''})
     setDetailBusy([])
     setDetailError('')
     setAppointmentOpen(true)
   }
   const saveAppointmentProfessional=async()=>{
     if(!selectedAppointment||detailSaving)return
+    if(!detailPatient){setDetailError('No fue posible cargar los datos del paciente.');return}
+    if(detailPatientForm.email&&!isValidEmail(detailPatientForm.email)){setDetailError('Ingresa un correo completo. Ejemplo: paciente@correo.com');return}
     if(detailLoading){setDetailError('Espera mientras verificamos la disponibilidad del profesional.');return}
     if(detailConflict){setDetailError(`${detailProfessional?.display_name||'El profesional'} ya tiene una cita que cruza este horario.`);return}
     setDetailSaving(true);setDetailError('')
     try{
+      const {id:patientRecordId,history,appointments:patientAppointments,messages,...patientPayload}=detailPatient
+      void patientRecordId; void history; void patientAppointments; void messages
+      await api.put(`/patients/${selectedAppointment.patient_id}`,{...patientPayload,...detailPatientForm})
+      const selectedRoom=rooms.find(room=>room.id===Number(detailRoomId))
       const {data}=await api.put(`/appointments/${selectedAppointment.id}`,{
         date:`${detailDate}T${detailTime}:00`,
         reason:detailReason.trim(),
-        status:selectedAppointment.status,
-        duration_minutes:selectedAppointment.duration_minutes,
+        status:detailStatus,
+        duration_minutes:Number(detailDuration),
         professional_user_id:detailProfessional?.id||null,
         professional:detailProfessional?.display_name||'',
-        room_id:selectedAppointment.room_id,
-        room_name:selectedAppointment.room_name||'',
+        room_id:Number(detailRoomId),
+        room_name:selectedRoom?.name||'',
       })
       setSelectedAppointment(data)
       setAppointmentOpen(false)
@@ -170,7 +185,7 @@ export default function AgendaPage(){
       </div> : <div className="grid gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3 sm:grid-cols-2">
         <div><Label>{t('firstName')}</Label><Input autoFocus required value={newPatient.first_name} onChange={e=>setNewPatient({...newPatient,first_name:e.target.value})} className="mt-1 bg-white/5 border-white/10"/></div>
         <div><Label>{t('firstSurname')} <span className="text-zinc-500">({t('optional')})</span></Label><Input value={newPatient.first_surname} onChange={e=>setNewPatient({...newPatient,first_surname:e.target.value})} className="mt-1 bg-white/5 border-white/10"/></div>
-        <div><Label>Tipo de documento</Label><select required value={newPatient.document_type} onChange={e=>setNewPatient({...newPatient,document_type:e.target.value})} className="mt-1 h-10 w-full rounded-md border border-white/10 bg-zinc-900 px-3 text-sm"><option value="">Seleccionar...</option>{DOCUMENT_TYPES.map(([code,label])=><option key={code} value={code}>{code} · {label}</option>)}</select></div>
+        <div><Label>Tipo de documento</Label><select required value={newPatient.document_type} onChange={e=>setNewPatient({...newPatient,document_type:e.target.value})} className="mt-1 h-10 w-full rounded-md border border-white/10 bg-white/5 px-3 text-sm text-foreground"><option value="">Seleccionar...</option>{DOCUMENT_TYPES.map(([code,label])=><option key={code} value={code}>{code} · {label}</option>)}</select></div>
         <div><Label>Número de documento</Label><Input required maxLength={INPUT_LIMITS.document} value={newPatient.document_number} onChange={e=>setNewPatient({...newPatient,document_number:normalizeDocument(e.target.value)})} placeholder="Ej: 1234567890" className="mt-1 bg-white/5 border-white/10"/></div>
         <div className="sm:col-span-2"><Label>Fecha de nacimiento</Label><Input required type="date" max={dateKey(new Date())} value={newPatient.birth_date} onChange={e=>setNewPatient({...newPatient,birth_date:e.target.value})} className="mt-1 bg-white/5 border-white/10"/><p className="mt-1 text-[10px] text-zinc-500">Se utilizará para asignar automáticamente la dentición del odontograma.</p></div>
         <PhoneInput countryCode={newPatient.phone_country_code} phone={newPatient.phone} onCountryCodeChange={value=>setNewPatient({...newPatient,phone_country_code:value})} onPhoneChange={value=>setNewPatient({...newPatient,phone:value})} placeholder={t('phone')}/>
@@ -183,17 +198,16 @@ export default function AgendaPage(){
       <div><Label>Motivo o tratamiento</Label><Input required value={form.reason} onChange={e=>setForm({...form,reason:e.target.value})} className="mt-1 bg-white/5 border-white/10"/></div>{error&&<p className="rounded-lg border border-red-500/20 bg-red-500/10 p-2 text-sm text-red-300">{error}</p>}<Button disabled={submitting||availabilityPending||!selectedSlotAvailable} className="w-full"><Plus className="mr-2 h-4 w-4"/>{submitting?'Guardando...':newMode?'Registrar paciente y agendar':'Confirmar cita'}</Button>
     </form></DialogContent></Dialog>
     <Dialog open={appointmentOpen} onOpenChange={setAppointmentOpen}>
-      <DialogContent className="glass border-white/10 text-white sm:max-w-xl">
+      <DialogContent className="glass top-3 bottom-3 max-h-none translate-y-0 overflow-y-auto border-white/10 text-white sm:max-w-xl">
         <DialogHeader><DialogTitle className="text-xl">Detalle de la cita</DialogTitle></DialogHeader>
         {selectedAppointment&&<div className="space-y-5">
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-            <p className="text-xl font-semibold text-white">{detailPatient?.name||`Paciente #${selectedAppointment.patient_id}`}</p>
-            <div className="mt-3 grid gap-x-5 gap-y-2 text-base text-zinc-300 sm:grid-cols-2">
-              <p><span className="text-zinc-500">Teléfono:</span> {detailPatient?.phone?`${detailPatient.phone_country_code||''} ${detailPatient.phone}`:'Sin teléfono registrado'}</p>
-              <p><span className="text-zinc-500">Correo:</span> {detailPatient?.email||'Sin correo registrado'}</p>
-              <p><span className="text-zinc-500">Duración:</span> {selectedAppointment.duration_minutes||30} min</p>
-              <p><span className="text-zinc-500">Estado:</span> {statuses[selectedAppointment.status]||selectedAppointment.status}</p>
-              <p><span className="text-zinc-500">Consultorio:</span> {selectedAppointment.room_name||'Sin asignar'}</p>
+            <p className="text-base font-semibold text-white">Datos del paciente</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div><Label>Primer nombre</Label><Input required value={detailPatientForm.first_name} onChange={event=>setDetailPatientForm({...detailPatientForm,first_name:event.target.value})} className="mt-1 h-11 border-white/10 bg-white/5 text-base"/></div>
+              <div><Label>Primer apellido</Label><Input value={detailPatientForm.first_surname} onChange={event=>setDetailPatientForm({...detailPatientForm,first_surname:event.target.value})} className="mt-1 h-11 border-white/10 bg-white/5 text-base"/></div>
+              <div><Label>Teléfono</Label><div className="mt-1"><PhoneInput countryCode={detailPatientForm.phone_country_code} phone={detailPatientForm.phone} onCountryCodeChange={value=>setDetailPatientForm({...detailPatientForm,phone_country_code:value})} onPhoneChange={value=>setDetailPatientForm({...detailPatientForm,phone:value})}/></div></div>
+              <div><Label>Correo</Label><Input type="email" maxLength={INPUT_LIMITS.email} aria-invalid={Boolean(detailPatientForm.email&&!isValidEmail(detailPatientForm.email))} value={detailPatientForm.email} onChange={event=>setDetailPatientForm({...detailPatientForm,email:event.target.value})} placeholder="paciente@correo.com" className="mt-1 h-10 border-white/10 bg-white/5 aria-invalid:border-red-500"/></div>
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -201,9 +215,14 @@ export default function AgendaPage(){
             <div><Label className="text-sm">Hora de la cita</Label><Input required type="time" step="900" value={detailTime} onChange={event=>{setDetailTime(event.target.value);setDetailError('')}} className="mt-1 h-11 border-white/10 bg-white/5 text-base"/></div>
           </div>
           <div><Label className="text-sm">Motivo o tratamiento</Label><Input required value={detailReason} onChange={event=>setDetailReason(event.target.value)} className="mt-1 h-11 border-white/10 bg-white/5 text-base"/></div>
-          <div><Label className="text-sm">Dr., Dra. o especialista asignado</Label><select value={detailProfessionalId} onChange={event=>{setDetailProfessionalId(event.target.value);setDetailError('')}} className="mt-1 h-12 w-full rounded-md border border-white/10 bg-zinc-900 px-3 text-base font-medium"><option value="">Sin profesional asignado</option>{professionals.map(professional=><option key={professional.id} value={professional.id}>{professional.display_name} · {professional.role==='specialist'?'Especialista':'Odontología general'}</option>)}</select>{detailProfessionalId&&<p className={`mt-2 rounded-lg border p-3 text-sm ${detailLoading?'border-white/10 text-zinc-400':detailConflict?'border-red-500/30 bg-red-500/10 text-red-300':'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}>{detailLoading?'Verificando disponibilidad...':detailConflict?`${detailProfessional?.display_name} no está disponible en este horario.`:`${detailProfessional?.display_name} está disponible en este horario.`}</p>}</div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div><Label className="text-sm">Duración</Label><select value={detailDuration} onChange={event=>{setDetailDuration(Number(event.target.value));setDetailError('')}} className="mt-1 h-11 w-full rounded-md border border-white/10 bg-white/5 px-3 text-sm text-foreground">{Array.from({length:16},(_,index)=>(index+1)*15).map(minutes=><option key={minutes} value={minutes}>{minutes} min</option>)}</select></div>
+            <div><Label className="text-sm">Estado</Label><select value={detailStatus} onChange={event=>setDetailStatus(event.target.value)} className="mt-1 h-11 w-full rounded-md border border-white/10 bg-white/5 px-3 text-sm text-foreground">{Object.entries(statuses).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></div>
+            <div><Label className="text-sm">Consultorio</Label><select required value={detailRoomId} onChange={event=>setDetailRoomId(event.target.value)} className="mt-1 h-11 w-full rounded-md border border-white/10 bg-white/5 px-3 text-sm text-foreground"><option value="">Seleccionar...</option>{rooms.map(room=><option key={room.id} value={room.id}>{room.name}</option>)}</select></div>
+          </div>
+          <div><Label className="text-sm">Dr., Dra. o especialista asignado</Label><select value={detailProfessionalId} onChange={event=>{setDetailProfessionalId(event.target.value);setDetailError('')}} className="mt-1 h-12 w-full rounded-md border border-white/10 bg-white/5 px-3 text-base font-medium text-foreground"><option value="">Sin profesional asignado</option>{professionals.map(professional=><option key={professional.id} value={professional.id}>{professional.display_name} · {professional.role==='specialist'?'Especialista':'Odontología general'}</option>)}</select>{detailProfessionalId&&<p className={`mt-2 rounded-lg border p-3 text-sm ${detailLoading?'border-white/10 text-zinc-400':detailConflict?'border-red-500/30 bg-red-500/10 text-red-300':'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}>{detailLoading?'Verificando disponibilidad...':detailConflict?`${detailProfessional?.display_name} no está disponible en este horario.`:`${detailProfessional?.display_name} está disponible en este horario.`}</p>}</div>
           {detailError&&<p className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">{detailError}</p>}
-          <div className="flex flex-wrap justify-between gap-2"><Button type="button" variant="outline" onClick={()=>{setAppointmentOpen(false);navigate(`/pacientes/${selectedAppointment.patient_id}`)}} className="border-white/10">Abrir expediente</Button><div className="flex gap-2"><Button type="button" variant="outline" onClick={()=>setAppointmentOpen(false)} className="border-white/10">Cerrar</Button><Button type="button" onClick={saveAppointmentProfessional} disabled={detailSaving||detailLoading||Boolean(detailConflict)||!detailReason.trim()||!detailDate||!detailTime}>{detailSaving?'Guardando...':'Guardar cambios'}</Button></div></div>
+          <div className="flex flex-wrap justify-between gap-2"><Button type="button" variant="outline" onClick={()=>{setAppointmentOpen(false);navigate(`/pacientes/${selectedAppointment.patient_id}`)}} className="border-white/10">Abrir expediente</Button><div className="flex gap-2"><Button type="button" variant="outline" onClick={()=>setAppointmentOpen(false)} className="border-white/10">Cerrar</Button><Button type="button" onClick={saveAppointmentProfessional} disabled={detailSaving||detailLoading||Boolean(detailConflict)||!detailPatientForm.first_name.trim()||!detailReason.trim()||!detailDate||!detailTime||!detailRoomId}>{detailSaving?'Guardando...':'Guardar cambios'}</Button></div></div>
         </div>}
       </DialogContent>
     </Dialog>
