@@ -812,6 +812,7 @@ def create_medical_history(patient_id: int, history: schemas.MedicalHistoryCreat
 def search_cups_catalog(
     search: str = Query("", max_length=120),
     category: str = Query("odontology", pattern=r"^(odontology|all)$"),
+    page: int = Query(1, ge=1, le=1000),
     limit: int = Query(50, ge=1, le=100),
     current_user: models.User = Depends(auth.get_current_user),
 ):
@@ -826,7 +827,15 @@ def search_cups_catalog(
             continue
         matches.append({key: value for key, value in item.items() if key != "search_text"})
     matches.sort(key=lambda item: (not item["priority"], item["code"]))
-    return {"items": matches[:limit], "total": len(matches), "category": category}
+    total = len(matches)
+    total_pages = max(1, (total + limit - 1) // limit)
+    if page > total_pages:
+        page = total_pages
+    start = (page - 1) * limit
+    return {
+        "items": matches[start:start + limit], "total": total, "page": page,
+        "limit": limit, "total_pages": total_pages, "category": category,
+    }
 
 
 @app.get("/patients/{patient_id}/clinical-history", response_model=List[schemas.ClinicalHistory])

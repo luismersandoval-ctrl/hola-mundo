@@ -20,6 +20,8 @@ class UserCreate(UserBase):
     password: PasswordText
 
 class User(UserBase):
+    # Existing clinics may use an email address as their login identifier.
+    username: constr(strip_whitespace=True, min_length=1, max_length=254)
     id: int
     role: str
     email: Optional[str] = None

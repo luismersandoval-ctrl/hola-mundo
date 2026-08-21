@@ -28,6 +28,8 @@ import {
   Pencil,
   Images,
   BookOpenCheck,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 
 const API = '/api'
@@ -163,6 +165,8 @@ export default function HistoriaClinica() {
   const [cupsSearch, setCupsSearch] = useState('')
   const [cupsResults, setCupsResults] = useState([])
   const [cupsTotal, setCupsTotal] = useState(0)
+  const [cupsPage, setCupsPage] = useState(1)
+  const [cupsTotalPages, setCupsTotalPages] = useState(1)
   const [cupsLoading, setCupsLoading] = useState(false)
   const [cupsError, setCupsError] = useState('')
 
@@ -223,19 +227,22 @@ export default function HistoriaClinica() {
       setCupsLoading(true)
       setCupsError('')
       try {
-        const { data } = await axios.get(`${API}/catalogs/cups`, { ...config, params: { search: cupsSearch, category: cupsCategory, limit: 60 } })
+        const { data } = await axios.get(`${API}/catalogs/cups`, { ...config, params: { search: cupsSearch, category: cupsCategory, page: cupsPage, limit: 60 } })
         setCupsResults(data.items)
         setCupsTotal(data.total)
+        setCupsPage(data.page)
+        setCupsTotalPages(data.total_pages)
       } catch (requestError) {
         setCupsResults([])
         setCupsTotal(0)
+        setCupsTotalPages(1)
         setCupsError(requestError.response?.status === 404 ? 'El servidor necesita reiniciarse para cargar el catálogo CUPS 2026.' : 'No fue posible consultar el catálogo CUPS. Intenta nuevamente.')
       } finally {
         setCupsLoading(false)
       }
     }, 200)
     return () => window.clearTimeout(requestTimer)
-  }, [cupsOpen, cupsSearch, cupsCategory, config])
+  }, [cupsOpen, cupsSearch, cupsCategory, cupsPage, config])
 
   const selectCups = (item) => {
     setForm((current) => ({ ...current, cups_code: item.code, cups_name: item.name }))
@@ -459,10 +466,10 @@ export default function HistoriaClinica() {
           <DialogContent className="glass max-h-[82vh] overflow-hidden border-white/10 text-white sm:max-w-4xl">
             <DialogHeader><DialogTitle>Tipos de consulta y procedimientos CUPS 2026</DialogTitle></DialogHeader>
             <div className="space-y-4 overflow-hidden">
-              <Input value={cupsSearch} onChange={(event) => setCupsSearch(event.target.value)} placeholder="Buscar por código o descripción..." className="border-white/10 bg-white/5" autoFocus />
+              <Input value={cupsSearch} onChange={(event) => { setCupsSearch(event.target.value); setCupsPage(1) }} placeholder="Buscar por código o descripción..." className="border-white/10 bg-white/5" autoFocus />
               <div className="flex gap-2 border-b border-white/10">
-                <button type="button" onClick={() => setCupsCategory('odontology')} className={`px-3 py-2 text-sm font-semibold ${cupsCategory === 'odontology' ? 'border-b-2 border-primary text-primary' : 'text-zinc-400'}`}>Usados en odontología</button>
-                <button type="button" onClick={() => setCupsCategory('all')} className={`px-3 py-2 text-sm font-semibold ${cupsCategory === 'all' ? 'border-b-2 border-primary text-primary' : 'text-zinc-400'}`}>Todos los CUPS</button>
+                <button type="button" onClick={() => { setCupsCategory('odontology'); setCupsPage(1) }} className={`px-3 py-2 text-sm font-semibold ${cupsCategory === 'odontology' ? 'border-b-2 border-primary text-primary' : 'text-zinc-400'}`}>Usados en odontología</button>
+                <button type="button" onClick={() => { setCupsCategory('all'); setCupsPage(1) }} className={`px-3 py-2 text-sm font-semibold ${cupsCategory === 'all' ? 'border-b-2 border-primary text-primary' : 'text-zinc-400'}`}>Todos los CUPS</button>
               </div>
               <p className="text-xs text-zinc-400">{cupsLoading ? 'Buscando...' : `${cupsTotal.toLocaleString('es-CO')} resultados · se muestran hasta 60`}</p>
               {cupsError && <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">{cupsError}</div>}
@@ -474,6 +481,10 @@ export default function HistoriaClinica() {
                 </button>)}
                 {!cupsLoading && !cupsError && cupsResults.length === 0 && <p className="p-8 text-center text-sm text-zinc-400">No se encontraron códigos con ese criterio.</p>}
               </div>
+              {!cupsError && cupsTotal > 0 && <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-zinc-500">Página {cupsPage.toLocaleString('es-CO')} de {cupsTotalPages.toLocaleString('es-CO')}</p>
+                <div className="flex items-center gap-2"><Button type="button" variant="outline" size="sm" disabled={cupsLoading || cupsPage <= 1} onClick={() => setCupsPage(page => page - 1)}><ChevronLeft className="mr-1 h-4 w-4" />Anterior</Button><Button type="button" variant="outline" size="sm" disabled={cupsLoading || cupsPage >= cupsTotalPages} onClick={() => setCupsPage(page => page + 1)}>Siguiente<ChevronRight className="ml-1 h-4 w-4" /></Button></div>
+              </div>}
             </div>
           </DialogContent>
         </Dialog>

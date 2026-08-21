@@ -128,6 +128,18 @@ def test_cups_catalog_search_and_odontology_filter(client, admin_headers):
     assert "ODONTOLOGIA GENERAL" in payload["items"][0]["name"]
     assert payload["items"][0]["priority"] is True
 
+    dental = client.get("/catalogs/cups?search=diente&category=odontology&limit=10&page=2", headers=admin_headers)
+    assert dental.status_code == 200, dental.text
+    dental_payload = dental.json()
+    assert dental_payload["page"] == 2
+    assert dental_payload["limit"] == 10
+    assert dental_payload["total_pages"] >= 2
+    assert all("DIENTE" in item["name"] for item in dental_payload["items"])
+
+    nasal = client.get("/catalogs/cups?search=hueso%20nasal&category=odontology", headers=admin_headers)
+    assert nasal.status_code == 200
+    assert nasal.json()["total"] == 0
+
     rejected = client.get("/catalogs/cups?category=invalid", headers=admin_headers)
     assert rejected.status_code == 422
 

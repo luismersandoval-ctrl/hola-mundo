@@ -26,6 +26,13 @@ def test_unicode_apostrophe_and_sql_text_remain_literal():
     assert "OR 1=1" in history.motivo_consulta
 
 
+def test_legacy_email_username_is_valid_in_user_response():
+    user = schemas.User(id=1, username="clinica@example.com", role="admin")
+    assert user.username == "clinica@example.com"
+    with pytest.raises(ValidationError):
+        schemas.UserCreate(username="clinica@example.com", password="SecurePass123!")
+
+
 @pytest.mark.parametrize("birth_date", ["2999-01-01", "1800-01-01", "2026-02-30"])
 def test_invalid_birth_dates_are_rejected(birth_date):
     with pytest.raises(ValidationError):
