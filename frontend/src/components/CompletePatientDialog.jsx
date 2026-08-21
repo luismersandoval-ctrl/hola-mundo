@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PhoneInput } from '@/components/PhoneInput'
-import { INPUT_LIMITS, normalizeDocument, normalizeName } from '@/lib/validation'
+import { INPUT_LIMITS, apiErrorMessage, isValidEmail, normalizeDocument, normalizeName } from '@/lib/validation'
 import { DOCUMENT_TYPES } from '@/lib/patientOptions'
 
 const initialForm = {
@@ -41,9 +41,9 @@ export function CompletePatientDialog({ open, onOpenChange, onCreated }) {
   const input=(field,label,required=false,type='text')=>{const isName=field.includes('name')||field.includes('surname');const isDocument=field==='document_number';return <Field label={label} required={required}><Input type={type} required={required} max={type==='date'?new Date().toISOString().slice(0,10):undefined} maxLength={isName?INPUT_LIMITS.name:isDocument?INPUT_LIMITS.document:type==='email'?INPUT_LIMITS.email:INPUT_LIMITS.shortText} value={form[field]} onChange={event=>{const value=isName?normalizeName(event.target.value):isDocument?normalizeDocument(event.target.value):event.target.value;setForm({...form,[field]:value})}} className="mt-1 bg-white/5 border-white/10"/></Field>}
 
   const submit=async(event)=>{
-    event.preventDefault();setSaving(true);setError('')
+    event.preventDefault();if(form.email&&!isValidEmail(form.email)){setError('Ingresa un correo completo. Ejemplo: paciente@correo.com');return}setSaving(true);setError('')
     try{const {data}=await api.post('/patients/',form);setForm(initialForm);onOpenChange(false);onCreated(data)}
-    catch(requestError){setError(requestError.response?.data?.detail||'No fue posible registrar el paciente.')}
+    catch(requestError){setError(apiErrorMessage(requestError, 'No fue posible registrar el paciente.'))}
     finally{setSaving(false)}
   }
 
