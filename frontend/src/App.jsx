@@ -95,6 +95,7 @@ function App() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="agenda" element={<AgendaPage />} />
+          <Route path="pacientes" element={<ClinicalAccessPage mode="patients" />} />
           <Route path="pacientes/:id" element={<PatientWorkspace />} />
           <Route path="historia-clinica" element={<ClinicalAccessPage mode="history" />} />
           <Route path="pacientes/:id/historia-clinica" element={<HistoriaClinica />} />

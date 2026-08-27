@@ -1605,32 +1605,83 @@ def update_inventory_item(item_id: int, item: schemas.InventoryItemUpdate, db: S
     db.refresh(record)
     return record
 
-@app.get("/reports/dashboard")
-def dashboard_report(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
-    require_management(current_user)
-    now = datetime.utcnow()
-    clinic_id = current_user.clinic_id
-    payments = db.query(models.Payment).filter(models.Payment.clinic_id == clinic_id).all()
-    income = sum(p.amount for p in payments if p.type == "income")
-    expenses = sum(p.amount for p in payments if p.type == "expense")
-    appointment_counts = dict(db.query(models.Appointment.status, func.count(models.Appointment.id)).join(models.Patient).filter(models.Patient.clinic_id == clinic_id).group_by(models.Appointment.status).all())
-    treatment_total = db.query(func.coalesce(func.sum(models.Treatment.amount), 0)).join(models.Patient).filter(models.Patient.clinic_id == clinic_id).scalar() or 0
-    paid_by_patient = dict(db.query(models.Payment.patient_id, func.coalesce(func.sum(models.Payment.amount), 0)).filter(models.Payment.clinic_id == clinic_id, models.Payment.type == "income").group_by(models.Payment.patient_id).all())
-    treatment_by_patient = dict(db.query(models.Treatment.patient_id, func.coalesce(func.sum(models.Treatment.amount), 0)).join(models.Patient).filter(models.Patient.clinic_id == clinic_id).group_by(models.Treatment.patient_id).all())
-    receivables = sum(max(float(total) - float(paid_by_patient.get(patient_id, 0)), 0) for patient_id, total in treatment_by_patient.items())
-    low_stock = db.query(models.InventoryItem).filter(models.InventoryItem.clinic_id == clinic_id, models.InventoryItem.quantity <= models.InventoryItem.min_stock).count()
-    upcoming = db.query(models.Appointment).join(models.Patient).filter(models.Patient.clinic_id == clinic_id, models.Appointment.date >= now).order_by(models.Appointment.date).limit(5).all()
+def monthly_report_data(db: Session, clinic_id: int, year: int, month: int):
+    period_start = datetime(year, month, 1)
+    next_month = datetime(year + (month == 12), 1 if month == 12 else month + 1, 1)
+    start_date, end_date = period_start.date(), next_month.date()
+
+    appointments = db.query(models.Appointment).join(models.Patient).filter(
+        models.Patient.clinic_id == clinic_id,
+        models.Appointment.date >= period_start,
+        models.Appointment.date < next_month,
+    )
+    appointment_counts = dict(appointments.with_entities(models.Appointment.status, func.count(models.Appointment.id)).group_by(models.Appointment.status).all())
+    active_patients = appointments.with_entities(func.count(func.distinct(models.Appointment.patient_id))).scalar() or 0
+
+    payments = db.query(models.Payment).filter(
+        models.Payment.clinic_id == clinic_id,
+        models.Payment.business_date >= start_date,
+        models.Payment.business_date < end_date,
+    ).all()
+    income = sum((payment.amount or 0) for payment in payments if payment.type == "income")
+    expenses = sum((payment.amount or 0) for payment in payments if payment.type == "expense")
+
+    treatment_total = db.query(func.coalesce(func.sum(models.Treatment.amount), 0)).join(models.Patient).filter(
+        models.Patient.clinic_id == clinic_id,
+        models.Treatment.created_at < next_month,
+    ).scalar() or 0
+    paid_total = db.query(func.coalesce(func.sum(models.Payment.amount), 0)).filter(
+        models.Payment.clinic_id == clinic_id,
+        models.Payment.type == "income",
+        models.Payment.treatment_id.isnot(None),
+        models.Payment.business_date < end_date,
+    ).scalar() or 0
+
+    today = datetime.now(ZoneInfo("America/Bogota")).date()
+    is_current_month = today.year == year and today.month == month
+    low_stock = None
+    if is_current_month:
+        low_stock = db.query(models.InventoryItem).filter(
+            models.InventoryItem.clinic_id == clinic_id,
+            models.InventoryItem.quantity <= models.InventoryItem.min_stock,
+        ).count()
+
     return {
-        "patients": db.query(models.Patient).filter(models.Patient.clinic_id == clinic_id).count(),
+        "period": f"{year:04d}-{month:02d}",
+        "patients": active_patients,
         "appointments": appointment_counts,
         "income": income,
         "expenses": expenses,
         "balance": income - expenses,
         "treatment_value": treatment_total,
-        "receivables": receivables,
+        "receivables": max(float(treatment_total) - float(paid_total), 0),
         "low_stock": low_stock,
-        "upcoming_appointments": [{"id": a.id, "patient_id": a.patient_id, "date": a.date, "reason": a.reason, "status": a.status} for a in upcoming],
+        "inventory_is_current_snapshot": is_current_month,
     }
+
+
+@app.get("/reports/dashboard")
+def dashboard_report(year: int | None = Query(None, ge=2000, le=2100), month: int | None = Query(None, ge=1, le=12), db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    require_management(current_user)
+    today = datetime.now(ZoneInfo("America/Bogota")).date()
+    selected_year = year or today.year
+    selected_month = month or today.month
+    return monthly_report_data(db, current_user.clinic_id, selected_year, selected_month)
+
+
+@app.get("/reports/history")
+def reports_history(months: int = Query(12, ge=1, le=36), db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    require_management(current_user)
+    today = datetime.now(ZoneInfo("America/Bogota")).date()
+    history = []
+    year, month = today.year, today.month
+    for _ in range(months):
+        history.append(monthly_report_data(db, current_user.clinic_id, year, month))
+        month -= 1
+        if month == 0:
+            month = 12
+            year -= 1
+    return history
 
 @app.get("/integrations/status")
 def integration_status(current_user: models.User = Depends(auth.get_current_user)):

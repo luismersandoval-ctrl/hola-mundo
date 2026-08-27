@@ -53,7 +53,7 @@ class RegistrationVerify(BaseModel):
     clinic_name: NameText
     email: EmailText
     password: PasswordText
-    code: constr(strip_whitespace=True, regex=r"^\d{6}$")
+    code: constr(strip_whitespace=True, pattern=r"^\d{6}$")
 
 class MessageResponse(BaseModel):
     message: str
@@ -115,7 +115,7 @@ class PatientDiagnosticImage(BaseModel):
         orm_mode = True
 
 class DiagnosticImageMetadata(BaseModel):
-    study_type: constr(regex=r"^(panoramic|periapical|occlusal|coronal|cephalometric|tomography|bitewing|other)$")
+    study_type: constr(pattern=r"^(panoramic|periapical|occlusal|coronal|cephalometric|tomography|bitewing|other)$")
     study_date: DateText = ""
     title: ShortText = ""
     notes: ClinicalText = ""
@@ -130,7 +130,7 @@ class ClinicalHistoryBase(BaseModel):
     examen_intraoral: Optional[ClinicalText] = ""
     plan_tratamiento: Optional[ClinicalText] = ""
     observaciones: Optional[ClinicalText] = ""
-    document_type: Optional[constr(regex=r"^(|AS|CD|CC|CE|CN|DE|MS|NI|UN|OTRO|PA|PE|PT|RC|TI|PEP|PPT)$")] = ""
+    document_type: Optional[constr(pattern=r"^(|AS|CD|CC|CE|CN|DE|MS|NI|UN|OTRO|PA|PE|PT|RC|TI|PEP|PPT)$")] = ""
     document_id: Optional[DocumentText] = ""
     birth_date: Optional[DateText] = ""
     address: Optional[ShortText] = ""
@@ -152,7 +152,7 @@ class ClinicalHistoryBase(BaseModel):
     systems_review: Optional[ClinicalText] = ""
     physical_exam: Optional[ClinicalText] = ""
     risk_factors: Optional[ClinicalText] = ""
-    cups_code: Optional[constr(strip_whitespace=True, max_length=16, regex=r"^[A-Za-z0-9.-]*$")] = ""
+    cups_code: Optional[constr(strip_whitespace=True, max_length=16, pattern=r"^[A-Za-z0-9.-]*$")] = ""
     cups_name: Optional[ClinicalText] = ""
     consultation_purpose: Optional[ShortText] = ""
     external_cause: Optional[ShortText] = ""
@@ -217,7 +217,7 @@ class DentalRoom(BaseModel):
 
 class MessageBase(BaseModel):
     content: ClinicalText
-    direction: constr(regex=r"^(in|out)$")
+    direction: constr(pattern=r"^(in|out)$")
 
 class MessageCreate(MessageBase):
     pass
@@ -272,8 +272,8 @@ class PatientBase(BaseModel):
     phone_country_code: Optional[PhoneText] = "+57"
     email: Optional[OptionalEmailText] = None
     assigned_user_id: Optional[PositiveId] = None
-    gender: Optional[constr(regex=r"^(|male|female|other|unspecified)$")] = ""
-    document_type: Optional[constr(regex=r"^(|AS|CD|CC|CE|CN|DE|MS|NI|UN|OTRO|PA|PE|PT|RC|TI|PEP|PPT)$")] = ""
+    gender: Optional[constr(pattern=r"^(|male|female|other|unspecified)$")] = ""
+    document_type: Optional[constr(pattern=r"^(|AS|CD|CC|CE|CN|DE|MS|NI|UN|OTRO|PA|PE|PT|RC|TI|PEP|PPT)$")] = ""
     document_number: Optional[DocumentText] = ""
     birth_date: Optional[DateText] = ""
     blood_type: Optional[ShortText] = ""
@@ -305,7 +305,7 @@ class PatientBase(BaseModel):
     _valid_birth_date = validator("birth_date", allow_reuse=True)(validate_birth_date)
 
 class PatientCreate(PatientBase):
-    @root_validator
+    @root_validator(skip_on_failure=True)
     def require_patient_name(cls, values):
         if not (values.get("first_name") or values.get("name")):
             raise ValueError("El primer nombre del paciente es obligatorio.")
@@ -393,7 +393,7 @@ class ClinicalReadiness(BaseModel):
 
 class TreatmentBase(BaseModel):
     name: NameText
-    tooth: Optional[constr(strip_whitespace=True, max_length=2, regex=r"^(|[1-8][1-8])$")] = ""
+    tooth: Optional[constr(strip_whitespace=True, max_length=2, pattern=r"^(|[1-8][1-8])$")] = ""
     status: Optional[TreatmentStatus] = TreatmentStatus.proposed
     amount: Optional[MoneyAmount] = 0
     base_amount: Optional[MoneyAmount] = 0
@@ -416,7 +416,7 @@ class TreatmentCreate(TreatmentBase):
 
 class TreatmentUpdate(BaseModel):
     name: Optional[NameText] = None
-    tooth: Optional[constr(strip_whitespace=True, max_length=2, regex=r"^(|[1-8][1-8])$")] = None
+    tooth: Optional[constr(strip_whitespace=True, max_length=2, pattern=r"^(|[1-8][1-8])$")] = None
     status: Optional[TreatmentStatus] = None
     amount: Optional[MoneyAmount] = None
     base_amount: Optional[MoneyAmount] = None
@@ -450,7 +450,7 @@ class PrescriptionBase(BaseModel):
     diagnosis: Optional[ClinicalText] = ""
     medications: JsonText
     general_instructions: Optional[ClinicalText] = ""
-    status: Optional[constr(regex=r"^(draft|sent)$")] = "draft"
+    status: Optional[constr(pattern=r"^(draft|sent)$")] = "draft"
 
     _valid_medications = validator("medications", allow_reuse=True)(validate_medications_json)
 
@@ -493,7 +493,7 @@ class PaymentBase(BaseModel):
     type: Optional[PaymentType] = PaymentType.income
     concept: RequiredShortText
     amount: PositiveMoneyAmount
-    method: Optional[constr(regex=r"^(cash|card|transfer|other)$")] = "cash"
+    method: Optional[constr(pattern=r"^(cash|card|transfer|other)$")] = "cash"
     business_date: Optional[date] = None
 
 class PaymentCreate(PaymentBase):
@@ -525,7 +525,7 @@ class CashClosing(BaseModel):
 
 class InventoryItemBase(BaseModel):
     name: NameText
-    sku: Optional[constr(strip_whitespace=True, max_length=80, regex=r"^[A-Za-z0-9._/-]*$")] = ""
+    sku: Optional[constr(strip_whitespace=True, max_length=80, pattern=r"^[A-Za-z0-9._/-]*$")] = ""
     quantity: Optional[QuantityAmount] = 0
     min_stock: Optional[QuantityAmount] = 0
     max_stock: Optional[QuantityAmount] = 0
@@ -534,7 +534,7 @@ class InventoryItemBase(BaseModel):
     unit_cost: Optional[MoneyAmount] = 0
 
 class InventoryItemCreate(InventoryItemBase):
-    @root_validator
+    @root_validator(skip_on_failure=True)
     def validate_stock_range(cls, values):
         minimum, maximum = values.get("min_stock"), values.get("max_stock")
         if maximum and minimum is not None and maximum < minimum:
@@ -543,7 +543,7 @@ class InventoryItemCreate(InventoryItemBase):
 
 class InventoryItemUpdate(BaseModel):
     name: Optional[NameText] = None
-    sku: Optional[constr(strip_whitespace=True, max_length=80, regex=r"^[A-Za-z0-9._/-]*$")] = None
+    sku: Optional[constr(strip_whitespace=True, max_length=80, pattern=r"^[A-Za-z0-9._/-]*$")] = None
     quantity: Optional[QuantityAmount] = None
     min_stock: Optional[QuantityAmount] = None
     max_stock: Optional[QuantityAmount] = None
