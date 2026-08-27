@@ -18,11 +18,14 @@ export default function ClinicalAccessPage({ mode }) {
   const [registerOpen, setRegisterOpen] = useState(false)
   const isHistory = mode === 'history'
   const isPeriodontogram = mode === 'periodontogram'
-  const title = isHistory ? 'Historias Clínicas' : isPeriodontogram ? 'Periodontogramas' : 'Odontogramas'
-  const description = isHistory
+  const isPatients = mode === 'patients'
+  const title = isPatients ? 'Pacientes registrados' : isHistory ? 'Historias Clínicas' : isPeriodontogram ? 'Periodontogramas' : 'Odontogramas'
+  const description = isPatients
+    ? 'Consulta los pacientes de la clínica y abre su expediente completo.'
+    : isHistory
     ? 'Selecciona un paciente para consultar o actualizar su expediente.'
     : isPeriodontogram ? 'Selecciona un paciente para registrar su evaluación periodontal.' : 'Selecciona un paciente para consultar o actualizar su odontograma.'
-  const Icon = isHistory ? FileText : isPeriodontogram ? Waves : Stethoscope
+  const Icon = isPatients ? UserRound : isHistory ? FileText : isPeriodontogram ? Waves : Stethoscope
 
   useEffect(() => {
     const loadPatients = async () => {
@@ -57,6 +60,10 @@ export default function ClinicalAccessPage({ mode }) {
     .sort((first, second) => (first.name || '').localeCompare(second.name || '', 'es', { sensitivity: 'base' }))
 
   const openPatient = (patientId) => {
+    if (isPatients) {
+      navigate(`/pacientes/${patientId}`)
+      return
+    }
     const destination = isHistory ? 'historia-clinica' : isPeriodontogram ? 'periodontograma' : 'odontograma'
     navigate(`/pacientes/${patientId}/${destination}`)
   }
@@ -75,9 +82,9 @@ export default function ClinicalAccessPage({ mode }) {
               <p className="text-sm text-zinc-400">{description}</p>
             </div>
           </div>
-          {isHistory&&<Button onClick={()=>setRegisterOpen(true)}><UserPlus className="mr-2 h-4 w-4"/>Registrar paciente completo</Button>}
+          {(isHistory||isPatients)&&<Button onClick={()=>setRegisterOpen(true)}><UserPlus className="mr-2 h-4 w-4"/>Registrar paciente completo</Button>}
         </header>
-        {isHistory&&<CompletePatientDialog open={registerOpen} onOpenChange={setRegisterOpen} onCreated={(patient)=>navigate(`/pacientes/${patient.id}/historia-clinica`)}/>}
+        {(isHistory||isPatients)&&<CompletePatientDialog open={registerOpen} onOpenChange={setRegisterOpen} onCreated={(patient)=>navigate(isPatients?`/pacientes/${patient.id}`:`/pacientes/${patient.id}/historia-clinica`)}/>}
 
         <Card className="glass border-white/10 shadow-lg">
           <CardHeader>

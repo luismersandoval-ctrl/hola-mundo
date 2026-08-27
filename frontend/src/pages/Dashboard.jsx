@@ -82,20 +82,32 @@ export default function Dashboard() {
       const date = new Date(monday)
       date.setDate(monday.getDate() + index)
       const key = dateKey(date)
-      const value = appointments.filter((appointment) => appointment.date.slice(0, 10) === key && appointment.status !== 'cancelled').length
-      return { key, date, value }
+      const dailyAppointments = appointments.filter((appointment) => appointment.date.slice(0, 10) === key)
+      return {
+        key,
+        date,
+        scheduled: dailyAppointments.filter((appointment) => ['pending', 'confirmed', 'in_room'].includes(appointment.status)).length,
+        completed: dailyAppointments.filter((appointment) => appointment.status === 'completed').length,
+        cancelled: dailyAppointments.filter((appointment) => appointment.status === 'cancelled').length,
+      }
     })
   }, [appointments, weekOffset])
-  const weeklyTotal = weeklyAppointments.reduce((total, day) => total + day.value, 0)
-  const weeklyMaximum = Math.max(...weeklyAppointments.map((day) => day.value), 1)
+  const weeklyTotals = weeklyAppointments.reduce((totals, day) => ({
+    scheduled: totals.scheduled + day.scheduled,
+    completed: totals.completed + day.completed,
+    cancelled: totals.cancelled + day.cancelled,
+  }), { scheduled: 0, completed: 0, cancelled: 0 })
+  const weeklyTotal = weeklyTotals.scheduled + weeklyTotals.completed + weeklyTotals.cancelled
+  const weeklyMaximum = Math.max(...weeklyAppointments.flatMap((day) => [day.scheduled, day.completed, day.cancelled]), 1)
   const weekStart = weeklyAppointments[0].date
   const weekEnd = weeklyAppointments[6].date
   const weekLabel = `${weekStart.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })} – ${weekEnd.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })}`
+  const todayKey = dateKey(new Date())
 
   const cards = [
-    { label: isClinicalProfessional ? 'Mis pacientes' : 'Pacientes registrados', value: patients.length, icon: Users, color: 'text-blue-400', background: 'bg-blue-500/10' },
-    { label: 'Citas para hoy', value: todayAppointments.length, icon: Calendar, color: 'text-emerald-400', background: 'bg-emerald-500/10' },
-    { label: 'Citas pendientes', value: pendingAppointments.length, icon: CalendarClock, color: 'text-amber-400', background: 'bg-amber-500/10' },
+    { label: isClinicalProfessional ? 'Mis pacientes' : 'Pacientes registrados', value: patients.length, icon: Users, color: 'text-blue-400', background: 'bg-blue-500/10', destination: '/pacientes', hint: 'Ver pacientes' },
+    { label: 'Citas para hoy', value: todayAppointments.length, icon: Calendar, color: 'text-emerald-400', background: 'bg-emerald-500/10', destination: `/agenda?view=day&date=${todayKey}`, hint: 'Ver agenda de hoy' },
+    { label: 'Citas pendientes', value: pendingAppointments.length, icon: CalendarClock, color: 'text-amber-400', background: 'bg-amber-500/10', destination: '/agenda?status=active', hint: 'Ver citas pendientes' },
   ]
 
   return (
@@ -113,13 +125,13 @@ export default function Dashboard() {
         {error && <p className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {cards.map(({ label, value, icon: Icon, color, background }) => (
-            <Card key={label} className="glass border-white/10">
+          {cards.map(({ label, value, icon: Icon, color, background, destination, hint }) => (
+            <Card key={label} role="link" tabIndex={0} aria-label={`${hint}: ${value}`} onClick={() => navigate(destination)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navigate(destination) } }} className="glass group cursor-pointer border-white/10 transition hover:-translate-y-0.5 hover:border-primary/40 hover:bg-white/[0.06] hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary">
               <CardHeader className="flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium text-zinc-400">{label}</CardTitle>
                 <span className={`rounded-xl p-2 ${background}`}><Icon className={`h-5 w-5 ${color}`} /></span>
               </CardHeader>
-              <CardContent><p className="text-4xl font-bold text-white">{value}</p></CardContent>
+              <CardContent><p className="text-4xl font-bold text-white">{value}</p><p className="mt-2 text-xs font-medium text-primary opacity-80 transition group-hover:opacity-100">{hint} →</p></CardContent>
             </Card>
           ))}
         </div>
@@ -144,12 +156,12 @@ export default function Dashboard() {
         <Card className="glass border-white/10">
           <CardHeader className="flex-row items-start justify-between gap-4">
             <div>
-              <CardTitle className="text-white">Pacientes agendados por día</CardTitle>
-              <p className="mt-1 text-sm text-zinc-400">Comparación semanal de citas programadas. No incluye citas canceladas.</p>
+              <CardTitle className="text-white">Actividad diaria de citas</CardTitle>
+              <p className="mt-1 text-sm text-zinc-400">Comparación semanal de citas activas, atendidas y canceladas.</p>
             </div>
             <div className="rounded-xl bg-blue-500/10 px-4 py-2 text-right">
               <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{weeklyTotal}</p>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Esta semana</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Citas de la semana</p>
             </div>
           </CardHeader>
           <CardContent>
@@ -158,35 +170,34 @@ export default function Dashboard() {
               <div className="text-center"><p className="text-sm font-semibold capitalize text-white">{weekLabel}</p>{weekOffset !== 0 && <button type="button" onClick={() => setWeekOffset(0)} className="mt-1 text-xs font-medium text-primary hover:underline">Volver a esta semana</button>}</div>
               <Button size="icon" variant="outline" onClick={() => setWeekOffset((value) => value + 1)} className="border-white/10" aria-label="Semana siguiente"><ChevronRight className="h-4 w-4" /></Button>
             </div>
-            <div className="grid h-64 grid-cols-7 items-end gap-2 border-b border-white/10 px-1 sm:gap-4" role="img" aria-label={`${weeklyTotal} citas agendadas durante la semana ${weekLabel}`}>
+            <div className="mb-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-xs font-medium text-zinc-400" aria-label="Leyenda de la gráfica">
+              <span className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-blue-500" />Agendadas <strong className="text-white">{weeklyTotals.scheduled}</strong></span>
+              <span className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-emerald-500" />Atendidas <strong className="text-white">{weeklyTotals.completed}</strong></span>
+              <span className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-red-500" />Canceladas <strong className="text-white">{weeklyTotals.cancelled}</strong></span>
+            </div>
+            <div className="grid h-72 grid-cols-7 items-end gap-2 border-b border-white/10 px-1 sm:gap-4" role="img" aria-label={`${weeklyTotal} citas registradas durante la semana ${weekLabel}: ${weeklyTotals.scheduled} agendadas, ${weeklyTotals.completed} atendidas y ${weeklyTotals.cancelled} canceladas`}>
               {weeklyAppointments.map((day) => {
                 const today = dateKey(new Date()) === day.key
-                const isPeak = day.value > 0 && day.value === weeklyMaximum
-                return <div key={day.key} className="flex h-full min-w-0 flex-col justify-end text-center">
-                  <span className={`mb-2 text-sm font-bold ${isPeak ? 'text-primary' : 'text-white'}`}>{day.value}</span>
-                  <div className="flex h-44 items-end justify-center rounded-t-lg bg-white/[0.03] px-1">
-                    <div className={`w-full max-w-14 rounded-t-lg transition-[height] duration-500 ${isPeak ? 'bg-primary' : 'bg-blue-500/65'}`} style={{ height: day.value ? `${Math.max((day.value / weeklyMaximum) * 100, 8)}%` : '3px' }} />
+                const bars = [
+                  ['scheduled', day.scheduled, 'bg-blue-500', 'Agendadas'],
+                  ['completed', day.completed, 'bg-emerald-500', 'Atendidas'],
+                  ['cancelled', day.cancelled, 'bg-red-500', 'Canceladas'],
+                ]
+                return <button type="button" key={day.key} onClick={() => navigate(`/agenda?view=day&date=${day.key}`)} className="group flex h-full min-w-0 flex-col justify-end text-center focus:outline-none" aria-label={`${day.date.toLocaleDateString('es-CO')}: ${day.scheduled} agendadas, ${day.completed} atendidas, ${day.cancelled} canceladas. Abrir agenda del día.`}>
+                  <div className="flex h-52 items-end justify-center gap-1 rounded-t-lg bg-white/[0.03] px-1 transition group-hover:bg-white/[0.07] sm:gap-2">
+                    {bars.map(([key, value, color, label]) => <div key={key} className="flex h-full min-w-0 flex-1 flex-col justify-end" title={`${label}: ${value}`}><span className="mb-1 text-[10px] font-bold text-white sm:text-xs">{value}</span><span className={`w-full rounded-t transition-[height] duration-500 ${color} ${value === 0 ? 'opacity-40' : ''}`} style={{ height: value ? `${Math.max((value / weeklyMaximum) * 100, 8)}%` : '3px' }} /></div>)}
                   </div>
                   <p className={`mt-2 truncate text-[10px] font-semibold uppercase sm:text-xs ${today ? 'text-primary' : 'text-zinc-500'}`}>{day.date.toLocaleDateString('es-CO', { weekday: 'short' }).replace('.', '')}</p>
                   <p className={`text-xs font-bold ${today ? 'text-primary' : 'text-zinc-400'}`}>{day.date.getDate()}</p>
-                </div>
+                </button>
               })}
             </div>
             {weeklyTotal === 0 && (
-              <p className="mt-4 text-center text-sm text-zinc-500">No hay pacientes agendados durante esta semana.</p>
+              <p className="mt-4 text-center text-sm text-zinc-500">No hay actividad de citas durante esta semana.</p>
             )}
           </CardContent>
         </Card>
 
-        <Card className="glass border-white/10">
-          <CardContent className="flex flex-col items-start justify-between gap-4 p-6 sm:flex-row sm:items-center">
-            <div>
-              <h2 className="text-lg font-semibold text-white">Agenda centralizada</h2>
-              <p className="mt-1 text-sm text-zinc-400">Desde la agenda puedes seleccionar un horario, registrar un paciente nuevo y asignar el profesional y la duración.</p>
-            </div>
-            <Button variant="outline" onClick={() => navigate('/agenda')} className="shrink-0 border-white/10">Ir a la agenda</Button>
-          </CardContent>
-        </Card>
       </div>
     </div>
   )

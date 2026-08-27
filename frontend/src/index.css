@@ -101,6 +101,20 @@ select option { background: #18181b; color: #fff; }
 .theme-light .patient-picker .patient-option[aria-selected="true"] { color: #fff; background-color: hsl(var(--primary)); }
 .theme-light .patient-picker .patient-option[aria-selected="true"] .patient-option-detail { color: rgba(255, 255, 255, .82); }
 
+@media print {
+  @page { size: A4; margin: 16mm; }
+  body { background: #fff !important; color: #111827 !important; }
+  body * { visibility: hidden; }
+  .print-report, .print-report * { visibility: visible; }
+  .print-report { position: absolute; inset: 0; width: 100%; }
+  .print-only { display: block !important; }
+  .reports-toolbar, .history-section, .tooltip-control { display: none !important; }
+  .report-cards { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 12px !important; }
+  .report-analysis { break-before: page; }
+  .report-card { break-inside: avoid; background: #fff !important; border: 1px solid #ddd6fe !important; box-shadow: none !important; }
+  .report-card p { color: #111827 !important; }
+}
+
 @layer base {
   * {
     @apply border-border;
@@ -120,4 +134,15 @@ select option { background: #18181b; color: #fff; }
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.05);
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+}
+
+/* Consent editor keeps its dark signing panel legible in both application themes. */
+[role="dialog"].bg-zinc-950 aside input {
+  background-color: #18181b !important;
+  color: #ffffff !important;
+  caret-color: #ffffff;
+}
+
+[role="dialog"].bg-zinc-950 aside input::placeholder {
+  color: #71717a !important;
 }
