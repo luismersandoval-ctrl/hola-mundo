@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Navigate, useOutletContext } from 'react-router-dom'
-import { CheckCircle2, Eye, EyeOff, Loader2, ShieldCheck, UserPlus, UsersRound } from 'lucide-react'
+import { Building2, CheckCircle2, Eye, EyeOff, Loader2, ShieldCheck, UserPlus, UsersRound } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,18 +20,23 @@ export default function StaffPage() {
   const { currentUser } = useOutletContext()
   const [staff, setStaff] = useState([])
   const [patients, setPatients] = useState([])
+  const [rooms, setRooms] = useState([])
+  const [roomCount, setRoomCount] = useState(1)
   const [form, setForm] = useState({ name: '', username: '', email: '', password: '', role: 'dentist', gender: 'male' })
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [savingRooms, setSavingRooms] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
   const load = useCallback(async () => {
     try {
-      const [staffResponse, patientsResponse] = await Promise.all([api.get('/staff/'), api.get('/patients/')])
+      const [staffResponse, patientsResponse, roomsResponse] = await Promise.all([api.get('/staff/'), api.get('/patients/'), api.get('/rooms/')])
       setStaff(staffResponse.data)
       setPatients(patientsResponse.data)
+      setRooms(roomsResponse.data)
+      setRoomCount(Math.max(roomsResponse.data.length, 1))
     } catch (requestError) {
       setError(errorMessage(requestError))
     } finally {
@@ -77,6 +82,18 @@ export default function StaffPage() {
     } catch (requestError) { setError(errorMessage(requestError)) }
   }
 
+  const configureRooms = async (event) => {
+    event.preventDefault()
+    const count = Math.min(20, Math.max(1, Number(roomCount) || 1))
+    setRoomCount(count); setSavingRooms(true); setError(''); setMessage('')
+    try {
+      const { data } = await api.put('/rooms/count', { count })
+      setRooms(data)
+      setRoomCount(data.length)
+      setMessage(`Consultorios configurados: ${data.length}.`)
+    } catch (requestError) { setError(errorMessage(requestError)) } finally { setSavingRooms(false) }
+  }
+
   if (loading || !currentUser) return <div className="min-h-screen flex items-center justify-center text-zinc-400"><Loader2 className="w-5 h-5 mr-2 animate-spin" />Cargando equipo...</div>
   const professionals = staff.filter((worker) => worker.active && ['dentist', 'specialist'].includes(worker.role))
 
@@ -84,6 +101,7 @@ export default function StaffPage() {
     <header><p className="text-sm font-medium text-primary">{currentUser.clinic_name}</p><h1 className="mt-1 text-3xl font-bold text-white">Equipo</h1><p className="mt-2 text-zinc-400">Administra el acceso del personal y asigna cada paciente a su profesional responsable.</p></header>
     {error && <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-red-300">{error}</div>}
     {message && <div role="status" className="flex gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-emerald-300"><CheckCircle2 className="w-5 h-5" />{message}</div>}
+    <Card className="glass border-white/10"><CardHeader><CardTitle className="flex items-center gap-2 text-white"><Building2 className="h-5 w-5 text-primary" />Consultorios</CardTitle><CardDescription>Define cuántos consultorios o unidades odontológicas utiliza la clínica. El valor predeterminado es 1.</CardDescription></CardHeader><CardContent><form onSubmit={configureRooms} className="flex flex-col gap-3 sm:flex-row sm:items-end"><div className="w-full sm:max-w-xs"><Label htmlFor="room-count">Cantidad de consultorios</Label><Input id="room-count" type="number" min="1" max="20" required value={roomCount} onChange={(event) => setRoomCount(event.target.value)} className="mt-1 bg-white/5 border-white/10" /></div><Button disabled={savingRooms}>{savingRooms ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Building2 className="mr-2 h-4 w-4" />}Guardar configuración</Button><p className="text-xs text-zinc-500 sm:pb-2">Activos actualmente: {rooms.length}</p></form></CardContent></Card>
     <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
       <Card className="glass border-white/10 h-fit"><CardHeader><CardTitle className="flex items-center gap-2 text-white"><UserPlus className="w-5 h-5 text-primary" />Agregar trabajador</CardTitle><CardDescription>La contraseña inicial debe cumplir las reglas de seguridad.</CardDescription></CardHeader><CardContent><form onSubmit={createWorker} className="space-y-4">
         <div><Label>Nombre completo</Label><Input required minLength={3} value={form.name} onChange={(e) => setForm({...form,name:e.target.value})} className="mt-1 bg-white/5 border-white/10" /></div>

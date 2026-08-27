@@ -71,6 +71,35 @@ select option { background: #18181b; color: #fff; }
 .theme-light .appointment-status { background: rgba(15, 23, 42, .78); color: #fff; }
 .theme-light .appointment-status option { background: #fff; color: #0f172a; }
 .theme-light .appointment-card { color: #fff; }
+.appointment-card.bg-amber-500 { color: #0f172a; }
+.appointment-card:has(> p:only-child) { display: none; }
+.group:has(> .appointment-card) > button {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: block;
+  border: 0;
+  color: transparent;
+  background: transparent;
+}
+.group > .appointment-card {
+  position: relative;
+  z-index: 20;
+}
+.theme-light .availability-panel { background-color: #f1f5f9; }
+.theme-light .availability-slot { color: #0f172a; }
+.theme-light .text-blue-200, .theme-light .text-blue-300,
+.theme-light .text-emerald-300, .theme-light .text-emerald-400,
+.theme-light .text-amber-200, .theme-light .text-amber-300, .theme-light .text-amber-400,
+.theme-light .text-red-300, .theme-light .text-red-400,
+.theme-light .text-violet-300 { color: #0f172a; }
+.theme-light .sidebar-nav-item:not([data-active="true"]):hover { color: #0f172a; font-weight: 700; background-color: #e2e8f0; }
+.theme-light .patient-picker { background-color: #f1f5f9; border-color: #cbd5e1; box-shadow: inset 0 1px 2px rgba(15, 23, 42, .04); }
+.theme-light .patient-picker .patient-option { color: #1e293b; background-color: rgba(255, 255, 255, .72); }
+.theme-light .patient-picker .patient-option:hover { color: #0f172a; background-color: #e2e8f0; }
+.theme-light .patient-picker .patient-option-detail { color: #64748b; }
+.theme-light .patient-picker .patient-option[aria-selected="true"] { color: #fff; background-color: hsl(var(--primary)); }
+.theme-light .patient-picker .patient-option[aria-selected="true"] .patient-option-detail { color: rgba(255, 255, 255, .82); }
 
 @layer base {
   * {

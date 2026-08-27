@@ -1,6 +1,7 @@
 # Python
 backend/venv/
 backend/__pycache__/
+backend/uploads/
 *.py[cod]
 
 # Datos y configuración local
@@ -13,6 +14,10 @@ backend/__pycache__/
 frontend/node_modules/
 frontend/dist/
 frontend/logs/
+frontend/test-results/
+frontend/playwright-report/
+.coverage
+coverage.json
 *.log
 
 # Editores y sistema operativo

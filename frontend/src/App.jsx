@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
-import { Activity, Menu, Moon, Sun } from 'lucide-react'
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useOutletContext } from 'react-router-dom'
+import { Menu, Moon, Sun } from 'lucide-react'
 import { Sidebar } from './components/Sidebar'
 import ClinicalAccessPage from './pages/ClinicalAccessPage'
 import Dashboard from './pages/Dashboard'
@@ -8,6 +8,7 @@ import HistoriaClinica from './pages/HistoriaClinica'
 import Login from './pages/Login'
 import OdontogramaPage from './pages/OdontogramaPage'
 import PeriodontogramaPage from './pages/PeriodontogramaPage'
+import TreatmentCatalogPage from './pages/TreatmentCatalogPage'
 import PagosPage from './pages/PagosPage'
 import PatientWorkspace from './pages/PatientWorkspace'
 import AgendaPage from './pages/AgendaPage'
@@ -19,6 +20,7 @@ import IntegrationsPage from './pages/IntegrationsPage'
 import StaffPage from './pages/StaffPage'
 import { api } from './lib/api'
 import { LanguageProvider, LanguageToggle } from './lib/i18n'
+import odontoSpaceLogo from '@/assets/brand/odontospace-logo.png'
 
 function AuthenticatedLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -65,10 +67,7 @@ function AuthenticatedLayout() {
         <button type="button" onClick={() => setMobileMenuOpen(true)} aria-label="Abrir menú" className="p-2 rounded-lg text-zinc-300 hover:bg-white/10">
           <Menu className="w-6 h-6" />
         </button>
-        <div className="flex items-center gap-2">
-          <Activity className="w-5 h-5 text-primary" />
-          <div className="leading-tight text-center"><span className="block font-bold text-white">OdontoSpace</span><span className="block max-w-[170px] truncate text-[10px] text-primary">{currentUser?.clinic_name}</span></div>
-        </div>
+        <div className="rounded-lg bg-white/95 px-2 pb-1"><img src={odontoSpaceLogo} alt="OdontoSpace" className="h-auto w-[155px]"/><span className="-mt-5 ml-[39px] block max-w-[116px] truncate text-[10px] font-semibold text-violet-800">{currentUser?.clinic_name}</span></div>
         <div className="flex items-center gap-1"><LanguageToggle compact/><button type="button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Activar tema claro' : 'Activar tema oscuro'} className="p-2 rounded-lg text-zinc-300 hover:bg-white/10">{theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}</button></div>
       </header>
       <main className={`min-h-screen pt-16 lg:pt-0 transition-[margin] duration-300 ${sidebarCollapsed ? 'lg:ml-[72px]' : 'lg:ml-[260px]'}`}>
@@ -76,6 +75,12 @@ function AuthenticatedLayout() {
       </main>
     </div>
   )
+}
+
+function AdministrativeOnly({ children }) {
+  const { currentUser } = useOutletContext()
+  if (!currentUser) return null
+  return ['admin', 'administrative'].includes(currentUser.role) ? children : <Navigate to="/dashboard" replace />
 }
 
 function App() {
@@ -87,7 +92,7 @@ function App() {
         <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" replace />} />
         <Route path="/register" element={!isAuthenticated ? <Register /> : <Navigate to="/" replace />} />
         <Route element={isAuthenticated ? <AuthenticatedLayout /> : <Navigate to="/login" replace />}>
-          <Route index element={<Navigate to="/agenda" replace />} />
+          <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="agenda" element={<AgendaPage />} />
           <Route path="pacientes/:id" element={<PatientWorkspace />} />
@@ -97,12 +102,13 @@ function App() {
           <Route path="pacientes/:id/odontograma" element={<OdontogramaPage />} />
           <Route path="periodontograma" element={<ClinicalAccessPage mode="periodontogram" />} />
           <Route path="pacientes/:id/periodontograma" element={<PeriodontogramaPage />} />
-          <Route path="pagos" element={<div className="p-4 md:p-8"><PagosPage /></div>} />
-          <Route path="inventario" element={<InventoryPage />} />
+          <Route path="pagos" element={<AdministrativeOnly><div className="p-4 md:p-8"><PagosPage /></div></AdministrativeOnly>} />
+          <Route path="inventario" element={<AdministrativeOnly><InventoryPage /></AdministrativeOnly>} />
           <Route path="reportes" element={<ReportsPage />} />
           <Route path="recordatorios" element={<RemindersPage />} />
           <Route path="integraciones" element={<IntegrationsPage />} />
           <Route path="personal" element={<StaffPage />} />
+          <Route path="planes-tratamiento" element={<TreatmentCatalogPage />} />
         </Route>
         <Route path="*" element={<Navigate to={isAuthenticated ? '/' : '/login'} replace />} />
       </Routes>

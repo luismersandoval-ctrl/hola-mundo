@@ -13,6 +13,11 @@ export default defineConfig(({ mode }) => {
   server: {
     allowedHosts: true,
     proxy: {
+      "/landing": {
+        target: env.VITE_LANDING_PROXY_TARGET || "http://127.0.0.1:4173",
+        changeOrigin: true,
+        rewrite: (requestPath) => requestPath.replace(/^\/landing/, "") || "/",
+      },
       "/api": {
         target: env.VITE_API_PROXY_TARGET || "http://127.0.0.1:8000",
         changeOrigin: true,

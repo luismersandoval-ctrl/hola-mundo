@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import axios from 'axios'
-import { AlertTriangle, ArrowLeft, CheckCircle2, Loader2, Save, Stethoscope } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, CheckCircle2, ClipboardList, Loader2, Save, Stethoscope } from 'lucide-react'
 import Odontograma from '@/components/Odontograma'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,6 +16,7 @@ export default function OdontogramaPage() {
   const [patient, setPatient] = useState(null)
   const [initialState, setInitialState] = useState(null)
   const [odontogramState, setOdontogramState] = useState(null)
+  const [treatments, setTreatments] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -28,8 +29,12 @@ export default function OdontogramaPage() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const patientResponse = await axios.get(`${API}/patients/${patientId}`, getConfig())
+        const [patientResponse, treatmentResponse] = await Promise.all([
+          axios.get(`${API}/patients/${patientId}`, getConfig()),
+          axios.get(`${API}/patients/${patientId}/treatments`, getConfig()),
+        ])
         setPatient(patientResponse.data)
+        setTreatments(treatmentResponse.data)
 
         try {
           const odontogramResponse = await axios.get(`${API}/patients/${patientId}/odontograma`, getConfig())
@@ -123,7 +128,7 @@ export default function OdontogramaPage() {
         {initialState !== null && patient && (
           <Card className="glass border-white/10 shadow-lg overflow-hidden">
             <CardHeader>
-              <CardTitle className="text-white">Registro dental permanente</CardTitle>
+              <CardTitle className="text-white">Registro dental del paciente</CardTitle>
               <p className="text-sm text-zinc-500">
                 Haz clic en una superficie para cambiar su estado. Usa clic derecho sobre una pieza para definir su estado general.
               </p>
@@ -132,12 +137,16 @@ export default function OdontogramaPage() {
             <CardContent className="px-3 sm:px-6">
               <div className="w-full overflow-x-auto overscroll-x-contain rounded-2xl bg-white border border-zinc-200 shadow-inner">
                 <div className={`min-w-[920px] px-6 py-6 ${readOnly ? 'pointer-events-none' : ''}`}>
-                  <Odontograma initialState={initialState} onChange={handleChange} />
+                  <Odontograma key={patientId} initialState={initialState} onChange={handleChange} birthDate={patient.birth_date} />
                 </div>
               </div>
             </CardContent>
           </Card>
         )}
+        <Card className="glass mt-6 border-white/10 shadow-lg">
+          <CardHeader className="flex flex-row items-center justify-between gap-3"><div><CardTitle className="text-white">Plan relacionado con el odontograma</CardTitle><p className="mt-1 text-sm text-zinc-500">Tratamientos vinculados a piezas y hallazgos de este registro.</p></div><Button variant="outline" onClick={()=>navigate(`/pacientes/${patientId}?tab=treatments`)} className="border-amber-500/30 text-amber-300"><ClipboardList className="mr-2 h-4 w-4"/>Gestionar plan</Button></CardHeader>
+          <CardContent>{treatments.length===0?<p className="rounded-xl border border-dashed border-white/10 p-6 text-center text-zinc-500">Aún no hay tratamientos asociados.</p>:<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{treatments.map((item)=><div key={item.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-4"><div className="flex items-center justify-between gap-2"><p className="font-semibold text-white">{item.name}</p>{item.tooth&&<span className="rounded-full bg-amber-500/15 px-2 py-1 text-xs text-amber-300">Pieza {item.tooth}</span>}</div><p className="mt-2 text-xs text-zinc-500">{item.odontogram_reference||'Tratamiento general'}</p><p className="mt-3 text-xs font-medium text-primary">{({proposed:'Propuesto',accepted:'Aceptado',in_progress:'En proceso',completed:'Realizado',rejected:'Rechazado'})[item.status]||item.status}</p></div>)}</div>}</CardContent>
+        </Card>
       </div>
     </div>
   )
